@@ -1,0 +1,2532 @@
+<!DOCTYPE html>
+<html lang="pt-BR" data-tema="dark">
+<head>
+<!-- ═══════════════════════════════════════════════════════════════
+     HuntPro Brasil — aplicativo em ARQUIVO ÚNICO.
+     ANTES DE USAR: procure por  API_URL:  mais abaixo neste arquivo
+     (dentro da tag <script>) e cole a URL /exec do seu Web App do
+     Google Apps Script. O backend está em Codigo.gs.
+     ═══════════════════════════════════════════════════════════════ -->
+
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>HuntPro Brasil — Manejo Inteligente de Javalis</title>
+  <meta name="description" content="Plataforma de manejo de javalis: capturas, ocorrências, mapa, matilha, câmeras trap, parceiros e relatórios.">
+  <meta name="theme-color" content="#0e1310">
+
+  <!-- Fontes -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Sora:wght@600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+
+  <!-- Leaflet (mapa) -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+  <!-- TailwindCSS (CDN) + configuração de marca -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            brand: {
+              100: '#e5efe0', 200: '#c9ddc0', 300: '#a7c79a', 400: '#86ab77',
+              500: '#6b8f5e', 600: '#557349', 700: '#42583a', 800: '#2f3f29', 950: '#101913'
+            }
+          },
+          fontFamily: {
+            display: ['Sora', 'Inter', 'sans-serif'],
+            sans: ['Inter', 'system-ui', 'sans-serif'],
+            mono: ['JetBrains Mono', 'monospace']
+          }
+        }
+      }
+    };
+  </script>
+
+  <style>
+/* HuntPro Brasil — styles.css
+   Tokens de tema (dark/light) + componentes base. Tailwind (CDN) cuida do resto. */
+
+:root {
+  --brand: #6b8f5e;      /* verde-oliva de campo */
+  --brand-300: #a7c79a;
+  --brand-400: #86ab77;
+  --brand-500: #6b8f5e;
+  --brand-950: #101913;
+}
+
+/* ----- Tema escuro (padrão) ----- */
+[data-tema="dark"] {
+  --bg: #0e1310;
+  --surface: #161d18;
+  --border: #26332b;
+  --text: #e7ede8;
+  --muted: #8a9a90;
+  color-scheme: dark;
+}
+
+/* ----- Tema claro ----- */
+[data-tema="light"] {
+  --bg: #f4f6f3;
+  --surface: #ffffff;
+  --border: #e2e8e0;
+  --text: #172019;
+  --muted: #667a6d;
+  color-scheme: light;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: 'Inter', system-ui, sans-serif;
+  margin: 0;
+  -webkit-font-smoothing: antialiased;
+}
+
+.font-display { font-family: 'Sora', 'Inter', sans-serif; }
+code, .font-mono { font-family: 'JetBrains Mono', monospace; }
+
+/* Utilitários de cor ligados às variáveis (complementam o Tailwind) */
+.surface { background: var(--surface); }
+.muted { color: var(--muted); }
+.text-app { color: var(--text); }
+.border-app { border-color: var(--border); }
+
+.text-brand-300 { color: var(--brand-300); }
+.text-brand-400 { color: var(--brand-400); }
+.bg-brand-950 { background: var(--brand-950); }
+
+/* ----- Sidebar ----- */
+.sidebar {
+  width: 250px;
+  background: var(--surface);
+  border-right: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+}
+@media (max-width: 768px) {
+  .sidebar {
+    position: fixed; inset: 0 auto 0 0; z-index: 40;
+    transform: translateX(-100%); transition: transform .25s ease;
+  }
+  .sidebar-aberta { transform: translateX(0); }
+}
+
+.nav-item {
+  display: flex; align-items: center; gap: .65rem;
+  padding: .55rem .75rem; border-radius: .55rem;
+  color: var(--muted); font-size: .875rem; font-weight: 500;
+  text-decoration: none; transition: all .15s;
+}
+.nav-item:hover { background: color-mix(in srgb, var(--brand) 12%, transparent); color: var(--text); }
+.nav-ativo { background: color-mix(in srgb, var(--brand) 20%, transparent); color: var(--brand-300); }
+
+/* ----- Inputs ----- */
+.input {
+  width: 100%; background: var(--bg);
+  border: 1px solid var(--border); border-radius: .55rem;
+  padding: .55rem .75rem; color: var(--text); font-size: .875rem;
+  outline: none; transition: border-color .15s;
+}
+.input:focus { border-color: var(--brand-500); box-shadow: 0 0 0 3px color-mix(in srgb, var(--brand) 20%, transparent); }
+.input::placeholder { color: var(--muted); }
+textarea.input { resize: vertical; }
+
+.input-file {
+  width: 100%; font-size: .8rem; color: var(--muted);
+}
+.input-file::file-selector-button {
+  margin-right: .75rem; padding: .4rem .8rem; border: 1px solid var(--border);
+  border-radius: .5rem; background: var(--bg); color: var(--text); cursor: pointer;
+}
+
+/* ----- Botões ----- */
+.btn-primary, .btn-ghost, .btn-danger {
+  display: inline-flex; align-items: center; gap: .4rem;
+  padding: .5rem .9rem; border-radius: .55rem; font-size: .875rem; font-weight: 600;
+  cursor: pointer; border: 1px solid transparent; transition: all .15s;
+}
+.btn-primary { background: var(--brand-500); color: #0d130f; }
+.btn-primary:hover { background: var(--brand-400); }
+.btn-primary:disabled { opacity: .6; cursor: default; }
+.btn-ghost { background: transparent; border-color: var(--border); color: var(--text); }
+.btn-ghost:hover { background: color-mix(in srgb, var(--brand) 10%, transparent); }
+.btn-danger { background: #b3453b; color: #fff; }
+.btn-danger:hover { background: #c9503f; }
+
+.icon-btn {
+  display: inline-flex; align-items: center; justify-content: center;
+  padding: .4rem; border-radius: .5rem; color: var(--muted);
+  cursor: pointer; background: transparent; border: none; transition: all .15s;
+}
+.icon-btn:hover { background: color-mix(in srgb, var(--brand) 12%, transparent); color: var(--text); }
+
+/* ----- Diversos ----- */
+.animate-in { animation: slideIn .25s ease; }
+@keyframes slideIn { from { opacity: 0; transform: translateY(-6px); } to { opacity: 1; transform: none; } }
+
+.line-clamp-2 {
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+}
+
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-thumb { background: var(--border); border-radius: 5px; }
+::-webkit-scrollbar-track { background: transparent; }
+
+/* foco visível para acessibilidade */
+:focus-visible { outline: 2px solid var(--brand-400); outline-offset: 2px; }
+
+@media (prefers-reduced-motion: reduce) {
+  * { animation: none !important; transition: none !important; }
+}
+
+/* Ajuste dos popups do Leaflet ao tema */
+.leaflet-popup-content-wrapper, .leaflet-popup-tip { background: var(--surface); color: var(--text); }
+
+</style>
+</head>
+<body>
+  <div id="app">
+    <!-- Splash inicial -->
+    <div style="height:100vh;display:flex;align-items:center;justify-content:center;color:var(--muted)">
+      <div style="text-align:center">
+        <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="var(--brand)" stroke-width="2"
+          style="animation:spin 1.2s linear infinite">
+          <circle cx="12" cy="12" r="9" stroke-opacity="0.25"/>
+          <path d="M21 12a9 9 0 0 0-9-9"/>
+        </svg>
+        <p style="margin-top:12px;font-family:Sora,sans-serif">Carregando HuntPro Brasil…</p>
+      </div>
+    </div>
+  </div>
+
+  <style>@keyframes spin { to { transform: rotate(360deg); } }</style>
+
+  <script>
+/* HuntPro Brasil — bundle único (gerado a partir dos módulos ES6). */
+(function(){
+'use strict';
+const __M = {};
+__M['api/adapter.js'] = {};
+__M['api/gas-adapter.js'] = {};
+__M['api/index.js'] = {};
+__M['api/supabase-adapter.js'] = {};
+__M['app.js'] = {};
+__M['config.js'] = {};
+__M['core/auth.js'] = {};
+__M['core/crud.js'] = {};
+__M['core/icons.js'] = {};
+__M['core/router.js'] = {};
+__M['core/schema.js'] = {};
+__M['core/store.js'] = {};
+__M['core/ui.js'] = {};
+__M['modules/admin.js'] = {};
+__M['modules/agenda.js'] = {};
+__M['modules/caes.js'] = {};
+__M['modules/cameras.js'] = {};
+__M['modules/capturas.js'] = {};
+__M['modules/chat.js'] = {};
+__M['modules/clubes.js'] = {};
+__M['modules/dashboard.js'] = {};
+__M['modules/equipes.js'] = {};
+__M['modules/fabricantes.js'] = {};
+__M['modules/fazendas.js'] = {};
+__M['modules/login.js'] = {};
+__M['modules/lojas.js'] = {};
+__M['modules/mapa.js'] = {};
+__M['modules/marketplace.js'] = {};
+__M['modules/ocorrencias.js'] = {};
+__M['modules/parceiros.js'] = {};
+__M['modules/relatorios.js'] = {};
+__M['modules/usuarios.js'] = {};
+__M['modules/veterinarios.js'] = {};
+
+/* ===== módulo: api/adapter.js ===== */
+(function(){
+/**
+ * HuntPro Brasil — adapter.js
+ * Contrato (interface) que TODO adapter de backend deve implementar.
+ * O frontend inteiro fala apenas com esta interface — por isso trocar de
+ * Google Apps Script para Supabase não exige mudar nenhuma tela.
+ *
+ * Métodos obrigatórios:
+ *   login(email, senha)            -> { token, usuario }
+ *   register(dados)                -> { token, usuario }
+ *   me()                           -> usuario
+ *   list(table, opts)              -> [registros]
+ *   get(table, id)                 -> registro
+ *   create(table, data)            -> registro
+ *   update(table, id, data)        -> registro
+ *   remove(table, id)              -> { id, deleted }
+ *   upload({base64,mimeType,...})  -> { id, url, name }
+ *   dashboard()                    -> { kpis, serie_capturas, ... }
+ *   report(tipo, params)           -> objeto de relatório
+ *   chatEnviar(canal, texto, anexo)-> mensagem
+ *   chatListar(canal)              -> [mensagens]
+ *
+ * setToken(token) / getToken() gerenciam a sessão.
+ */
+class Adapter {
+  constructor() { this.token = null; }
+  setToken(t) { this.token = t; }
+  getToken() { return this.token; }
+
+  async login() { throw new Error('não implementado'); }
+  async register() { throw new Error('não implementado'); }
+  async me() { throw new Error('não implementado'); }
+  async list() { throw new Error('não implementado'); }
+  async get() { throw new Error('não implementado'); }
+  async create() { throw new Error('não implementado'); }
+  async update() { throw new Error('não implementado'); }
+  async remove() { throw new Error('não implementado'); }
+  async upload() { throw new Error('não implementado'); }
+  async dashboard() { throw new Error('não implementado'); }
+  async report() { throw new Error('não implementado'); }
+  async chatEnviar() { throw new Error('não implementado'); }
+  async chatListar() { throw new Error('não implementado'); }
+}
+Object.assign(__M['api/adapter.js'], { Adapter });
+})();
+
+/* ===== módulo: config.js ===== */
+(function(){
+/**
+ * HuntPro Brasil — config.js
+ * Configuração global do frontend. Ajuste API_URL após publicar o Web App
+ * do Google Apps Script (URL terminada em /exec).
+ */
+const CONFIG = {
+  APP_NOME: 'HuntPro Brasil',
+  VERSAO: '1.0.0',
+
+  // ▼▼▼ COLE AQUI A URL /exec DO SEU GOOGLE APPS SCRIPT ▼▼▼
+  API_URL: 'https://script.google.com/macros/s/COLE_SEU_ID_AQUI/exec',
+
+  // Adapter ativo: 'gas' (Google Apps Script) hoje | 'supabase' no futuro.
+  BACKEND: 'gas',
+
+  // Config Supabase (usado só quando BACKEND === 'supabase').
+  SUPABASE_URL: '',
+  SUPABASE_ANON_KEY: '',
+
+  // Chave de armazenamento local da sessão.
+  STORAGE_KEY: 'huntpro.sessao',
+  TEMA_KEY: 'huntpro.tema',
+
+  // Mapa (Leaflet + OpenStreetMap) — centro padrão: Brasil.
+  MAPA_CENTRO: [-15.78, -47.93],
+  MAPA_ZOOM: 4,
+
+  // Open-Meteo (clima) não exige chave.
+  CLIMA_API: 'https://api.open-meteo.com/v1/forecast'
+};
+Object.assign(__M['config.js'], { CONFIG });
+})();
+
+/* ===== módulo: api/gas-adapter.js ===== */
+(function(){
+/**
+ * HuntPro Brasil — gas-adapter.js
+ * Implementação do Adapter usando Google Apps Script + Sheets + Drive.
+ *
+ * Detalhe importante de CORS: enviamos POST com Content-Type text/plain,
+ * o que caracteriza uma "simple request" e evita o preflight OPTIONS que
+ * o Apps Script não responde. O token vai no corpo (não em header).
+ */
+const { Adapter } = __M['api/adapter.js'];
+const { CONFIG } = __M['config.js'];
+class GasAdapter extends Adapter {
+  async _call(action, params = {}) {
+    const body = JSON.stringify({ action, token: this.token, ...params });
+    let res;
+    try {
+      res = await fetch(CONFIG.API_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+        body,
+        redirect: 'follow'
+      });
+    } catch (e) {
+      throw new Error('Falha de rede ao contatar a API. Verifique a URL /exec e sua conexão.');
+    }
+    let json;
+    try { json = await res.json(); }
+    catch (e) { throw new Error('Resposta inválida da API (não é JSON). Confirme o deploy do Web App.'); }
+
+    if (!json.ok) throw new Error(json.error || 'Erro na API');
+    return json;
+  }
+
+  async login(email, senha) {
+    const r = await this._call('auth.login', { email, senha });
+    this.setToken(r.data.token);
+    return r.data;
+  }
+  async register(dados) {
+    const r = await this._call('auth.register', dados);
+    this.setToken(r.data.token);
+    return r.data;
+  }
+  async me() { return (await this._call('auth.me')).data; }
+
+  async list(table, opts = {}) {
+    const r = await this._call('crud.list', { table, ...opts });
+    return r.data;
+  }
+  async get(table, id) { return (await this._call('crud.get', { table, id })).data; }
+  async create(table, data) { return (await this._call('crud.create', { table, data })).data; }
+  async update(table, id, data) { return (await this._call('crud.update', { table, id, data })).data; }
+  async remove(table, id) { return (await this._call('crud.delete', { table, id })).data; }
+
+  async upload(file) { return (await this._call('files.upload', file)).data; }
+
+  async dashboard() { return (await this._call('dashboard.summary')).data; }
+
+  async report(tipo, params = {}) {
+    return (await this._call('reports.' + tipo, params)).data;
+  }
+
+  async chatEnviar(canal, texto, anexo_url = '') {
+    return (await this._call('chat.enviar', { canal, texto, anexo_url })).data;
+  }
+  async chatListar(canal) {
+    return (await this._call('chat.listar', { canal })).data;
+  }
+}
+Object.assign(__M['api/gas-adapter.js'], { GasAdapter });
+})();
+
+/* ===== módulo: api/supabase-adapter.js ===== */
+(function(){
+/**
+ * HuntPro Brasil — supabase-adapter.js
+ * Esqueleto para migração futura ao Supabase/PostgreSQL SEM alterar o frontend.
+ *
+ * Como migrar (resumo):
+ *   1. Crie as tabelas no Supabase com os mesmos nomes/colunas do SCHEMAS
+ *      (backend/Config.gs). Habilite Row Level Security por tenant_id.
+ *   2. Importe o SDK: <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js"><\/script>
+ *      ou via import ESM.
+ *   3. Preencha SUPABASE_URL/SUPABASE_ANON_KEY em config.js e mude BACKEND='supabase'.
+ *   4. Implemente os métodos abaixo com o client do Supabase.
+ *
+ * A assinatura pública é idêntica à do GasAdapter, portanto nenhuma tela muda.
+ */
+const { Adapter } = __M['api/adapter.js'];
+const { CONFIG } = __M['config.js'];
+class SupabaseAdapter extends Adapter {
+  constructor() {
+    super();
+    // window.supabase é carregado pelo SDK oficial quando este adapter for usado.
+    this.client = (window.supabase && CONFIG.SUPABASE_URL)
+      ? window.supabase.createClient(CONFIG.SUPABASE_URL, CONFIG.SUPABASE_ANON_KEY)
+      : null;
+  }
+
+  async login(email, senha) {
+    const { data, error } = await this.client.auth.signInWithPassword({ email, password: senha });
+    if (error) throw new Error(error.message);
+    this.setToken(data.session.access_token);
+    return { token: this.token, usuario: data.user };
+  }
+
+  async register(dados) {
+    const { data, error } = await this.client.auth.signUp({ email: dados.email, password: dados.senha });
+    if (error) throw new Error(error.message);
+    return { token: data.session?.access_token, usuario: data.user };
+  }
+
+  async me() {
+    const { data } = await this.client.auth.getUser();
+    return data.user;
+  }
+
+  async list(table, opts = {}) {
+    let q = this.client.from(table).select('*');
+    if (opts.where) Object.entries(opts.where).forEach(([k, v]) => { q = q.eq(k, v); });
+    if (opts.sort) q = q.order(opts.sort, { ascending: opts.order === 'asc' });
+    if (opts.limit) q = q.limit(opts.limit);
+    const { data, error } = await q;
+    if (error) throw new Error(error.message);
+    return data;
+  }
+  async get(table, id) {
+    const { data, error } = await this.client.from(table).select('*').eq('id', id).single();
+    if (error) throw new Error(error.message);
+    return data;
+  }
+  async create(table, data) {
+    const { data: row, error } = await this.client.from(table).insert(data).select().single();
+    if (error) throw new Error(error.message);
+    return row;
+  }
+  async update(table, id, data) {
+    const { data: row, error } = await this.client.from(table).update(data).eq('id', id).select().single();
+    if (error) throw new Error(error.message);
+    return row;
+  }
+  async remove(table, id) {
+    const { error } = await this.client.from(table).delete().eq('id', id);
+    if (error) throw new Error(error.message);
+    return { id, deleted: true };
+  }
+
+  async upload(file) {
+    // Migrar uploads para o Supabase Storage aqui.
+    throw new Error('upload Supabase ainda não implementado');
+  }
+  async dashboard() { throw new Error('Implemente via RPC/Views no Supabase'); }
+  async report() { throw new Error('Implemente via RPC/Views no Supabase'); }
+  async chatEnviar(canal, texto, anexo_url = '') {
+    return this.create('mensagens', { canal, texto, anexo_url });
+  }
+  async chatListar(canal) {
+    return this.list('mensagens', { where: { canal }, sort: 'criado_em', order: 'asc' });
+  }
+}
+Object.assign(__M['api/supabase-adapter.js'], { SupabaseAdapter });
+})();
+
+/* ===== módulo: api/index.js ===== */
+(function(){
+/**
+ * HuntPro Brasil — api/index.js
+ * Seleciona o adapter conforme CONFIG.BACKEND e expõe uma instância única (api).
+ */
+const { CONFIG } = __M['config.js'];
+const { GasAdapter } = __M['api/gas-adapter.js'];
+const { SupabaseAdapter } = __M['api/supabase-adapter.js'];
+function criarApi() {
+  switch (CONFIG.BACKEND) {
+    case 'supabase': return new SupabaseAdapter();
+    case 'gas':
+    default: return new GasAdapter();
+  }
+}
+
+const api = criarApi();
+Object.assign(__M['api/index.js'], { api });
+})();
+
+/* ===== módulo: core/store.js ===== */
+(function(){
+/**
+ * HuntPro Brasil — store.js
+ * Estado global simples e persistência de sessão/tema em localStorage.
+ * (Este app é servido estático no GitHub Pages — localStorage é o
+ *  mecanismo correto de persistência de sessão no cliente.)
+ */
+const { CONFIG } = __M['config.js'];
+const store = {
+  usuario: null,
+  token: null,
+
+  carregarSessao() {
+    try {
+      const raw = localStorage.getItem(CONFIG.STORAGE_KEY);
+      if (!raw) return null;
+      const s = JSON.parse(raw);
+      this.usuario = s.usuario;
+      this.token = s.token;
+      return s;
+    } catch (e) { return null; }
+  },
+
+  salvarSessao(usuario, token) {
+    this.usuario = usuario;
+    this.token = token;
+    localStorage.setItem(CONFIG.STORAGE_KEY, JSON.stringify({ usuario, token }));
+  },
+
+  limparSessao() {
+    this.usuario = null;
+    this.token = null;
+    localStorage.removeItem(CONFIG.STORAGE_KEY);
+  },
+
+  // ----- Tema (dark/light) -----
+  getTema() {
+    return localStorage.getItem(CONFIG.TEMA_KEY) || 'dark';
+  },
+  setTema(tema) {
+    localStorage.setItem(CONFIG.TEMA_KEY, tema);
+    document.documentElement.setAttribute('data-tema', tema);
+  },
+  alternarTema() {
+    const novo = this.getTema() === 'dark' ? 'light' : 'dark';
+    this.setTema(novo);
+    return novo;
+  }
+};
+Object.assign(__M['core/store.js'], { store });
+})();
+
+/* ===== módulo: core/auth.js ===== */
+(function(){
+/**
+ * HuntPro Brasil — auth.js
+ * Ponte entre store (sessão) e o adapter de API. Também expõe a matriz de
+ * permissões do lado do cliente para esconder/mostrar itens de menu e botões.
+ */
+const { api } = __M['api/index.js'];
+const { store } = __M['core/store.js'];
+// Espelho da matriz do backend (apenas para UI; o backend continua sendo a autoridade).
+const ROLE_MATRIX = {
+  superadmin: { '*': 'crud' },
+  admin: { '*': 'crud' },
+  gestor: {
+    usuarios: 'r', equipes: 'ru', fazendas: 'crud', ocorrencias: 'crud',
+    capturas: 'crud', caes: 'crud', cameras: 'crud', parceiros: 'crud',
+    clubes: 'crud', lojas: 'crud', fabricantes: 'crud', veterinarios: 'crud',
+    produtos: 'crud', eventos: 'crud', agenda: 'crud', mensagens: 'crud',
+    relatorios: 'r', admin: '', '*': 'r'
+  },
+  membro: {
+    usuarios: '', fazendas: 'r', ocorrencias: 'crud', capturas: 'crud',
+    caes: 'r', cameras: 'r', parceiros: 'r', produtos: 'crud', eventos: 'r',
+    agenda: 'crud', mensagens: 'crud', relatorios: 'r', admin: '', '*': 'r'
+  }
+};
+
+const auth = {
+  iniciar() {
+    const s = store.carregarSessao();
+    if (s && s.token) api.setToken(s.token);
+    return s;
+  },
+
+  async login(email, senha) {
+    const r = await api.login(email, senha);
+    store.salvarSessao(r.usuario, r.token);
+    return r.usuario;
+  },
+
+  async registrar(dados) {
+    const r = await api.register(dados);
+    store.salvarSessao(r.usuario, r.token);
+    return r.usuario;
+  },
+
+  logout() {
+    store.limparSessao();
+    api.setToken(null);
+  },
+
+  usuario() { return store.usuario; },
+  autenticado() { return !!store.token; },
+
+  /** Verifica permissão para exibir elementos de UI. acao: read|create|update|delete */
+  pode(modulo, acao = 'read') {
+    const papel = store.usuario?.papel || 'membro';
+    const m = ROLE_MATRIX[papel] || {};
+    const perm = m[modulo] !== undefined ? m[modulo] : m['*'];
+    if (!perm) return false;
+    if (perm === 'crud') return true;
+    if (acao === 'read') return perm.includes('r');
+    if (acao === 'update') return perm.includes('u');
+    return perm === 'crud';
+  }
+};
+Object.assign(__M['core/auth.js'], { auth });
+})();
+
+/* ===== módulo: core/icons.js ===== */
+(function(){
+/**
+ * HuntPro Brasil — icons.js
+ * Ícones SVG (stroke) inline, leves e sem dependência externa.
+ * Uso: icon('mapa', 'w-5 h-5')
+ */
+const PATHS = {
+  dashboard: '<path d="M3 13h8V3H3v10Zm0 8h8v-6H3v6Zm10 0h8V11h-8v10Zm0-18v6h8V3h-8Z"/>',
+  usuarios: '<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/>',
+  equipes: '<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/>',
+  fazendas: '<path d="M3 21h18M5 21V7l8-4v18M19 21V11l-6-4"/><path d="M9 9v.01M9 12v.01M9 15v.01M9 18v.01"/>',
+  mapa: '<polygon points="3 6 9 3 15 6 21 3 21 18 15 21 9 18 3 21"/><line x1="9" y1="3" x2="9" y2="18"/><line x1="15" y1="6" x2="15" y2="21"/>',
+  ocorrencias: '<path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0Z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>',
+  capturas: '<path d="m12 2 2 7h7l-5.5 4 2 7L12 17l-5.5 3 2-7L3 9h7l2-7Z"/>',
+  caes: '<path d="M10 5.5 8 3H5l1.5 4M14 5.5 16 3h3l-1.5 4"/><path d="M6.5 7C5 8 4 10 4 12v3a5 5 0 0 0 5 5h6a5 5 0 0 0 5-5v-3c0-2-1-4-2.5-5"/><path d="M9 13h.01M15 13h.01M12 17c-1 0-1.5-.5-1.5-.5M12 17c1 0 1.5-.5 1.5-.5"/>',
+  cameras: '<path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2Z"/><circle cx="12" cy="13" r="4"/>',
+  parceiros: '<path d="M20.42 4.58a5.4 5.4 0 0 0-7.65 0L12 5.34l-.77-.76a5.4 5.4 0 0 0-7.65 7.65l.77.76L12 21l7.65-8.01.77-.76a5.4 5.4 0 0 0 0-7.65Z"/>',
+  marketplace: '<path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4Z"/><line x1="3" y1="6" x2="21" y2="6"/><path d="M16 10a4 4 0 0 1-8 0"/>',
+  agenda: '<rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>',
+  chat: '<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2Z"/>',
+  relatorios: '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z"/><polyline points="14 2 14 8 20 8"/><line x1="8" y1="13" x2="16" y2="13"/><line x1="8" y1="17" x2="13" y2="17"/>',
+  admin: '<path d="M12 2 4 6v6c0 5 3.5 8.5 8 10 4.5-1.5 8-5 8-10V6Z"/><path d="m9 12 2 2 4-4"/>',
+  sair: '<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/>',
+  mais: '<line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>',
+  editar: '<path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.12 2.12 0 0 1 3 3L12 15l-4 1 1-4Z"/>',
+  lixeira: '<polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>',
+  busca: '<circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>',
+  sol: '<circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/>',
+  lua: '<path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79Z"/>',
+  fechar: '<line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>',
+  menu: '<line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="18" x2="21" y2="18"/>',
+  boar: '<path d="M4 12c0-3 2-5 5-5 1 0 2 .3 3 1 1-.7 2-1 3-1 3 0 5 2 5 5 0 1-.3 2-1 3l1 3-3-1c-1 .7-2 1-3 1h-2c-1 0-2-.3-3-1l-3 1 1-3c-.7-1-1-2-1-3Z"/><path d="M8 12h.01M16 12h.01M2 10l2 1M22 10l-2 1"/>',
+  enviar: '<line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/>',
+  local: '<path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0Z"/><circle cx="12" cy="10" r="3"/>',
+  upload: '<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/>'
+};
+
+function icon(name, cls = 'w-5 h-5') {
+  const p = PATHS[name] || PATHS.dashboard;
+  return `<svg class="${cls}" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+    stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${p}</svg>`;
+}
+Object.assign(__M['core/icons.js'], { icon });
+})();
+
+/* ===== módulo: core/ui.js ===== */
+(function(){
+/**
+ * HuntPro Brasil — ui.js
+ * Componentes de interface reutilizáveis: toast, modal, confirmação,
+ * construtor de formulários a partir de schema e tabela de dados com ações.
+ */
+const { icon } = __M['core/icons.js'];
+// ---------------- Toast ----------------
+function toast(msg, tipo = 'info') {
+  const wrap = document.getElementById('toasts') || criarToastWrap();
+  const cores = {
+    info: 'border-brand-500 text-brand-100',
+    sucesso: 'border-emerald-500 text-emerald-100',
+    erro: 'border-red-500 text-red-100',
+    aviso: 'border-amber-500 text-amber-100'
+  };
+  const el = document.createElement('div');
+  el.className = `surface border-l-4 ${cores[tipo] || cores.info} px-4 py-3 rounded-lg shadow-lg
+    text-sm max-w-sm animate-in`;
+  el.textContent = msg;
+  wrap.appendChild(el);
+  setTimeout(() => { el.style.opacity = '0'; setTimeout(() => el.remove(), 300); }, 3800);
+}
+function criarToastWrap() {
+  const w = document.createElement('div');
+  w.id = 'toasts';
+  w.className = 'fixed top-4 right-4 z-[100] flex flex-col gap-2';
+  document.body.appendChild(w);
+  return w;
+}
+
+// ---------------- Modal ----------------
+function modal({ titulo, conteudo, onOpen, largura = 'max-w-lg' }) {
+  fecharModal();
+  const overlay = document.createElement('div');
+  overlay.id = 'modal-overlay';
+  overlay.className = 'fixed inset-0 z-[90] bg-black/60 backdrop-blur-sm flex items-start md:items-center justify-center p-4 overflow-y-auto';
+  overlay.innerHTML = `
+    <div class="surface w-full ${largura} rounded-2xl shadow-2xl my-8 border border-app">
+      <div class="flex items-center justify-between px-5 py-4 border-b border-app">
+        <h3 class="font-display text-lg font-semibold">${titulo || ''}</h3>
+        <button data-fechar class="muted hover:text-app p-1">${icon('fechar', 'w-5 h-5')}</button>
+      </div>
+      <div class="p-5" id="modal-body">${conteudo || ''}</div>
+    </div>`;
+  overlay.addEventListener('click', (e) => {
+    if (e.target === overlay || e.target.closest('[data-fechar]')) fecharModal();
+  });
+  document.body.appendChild(overlay);
+  if (onOpen) onOpen(overlay.querySelector('#modal-body'));
+  return overlay;
+}
+function fecharModal() {
+  const m = document.getElementById('modal-overlay');
+  if (m) m.remove();
+}
+
+// ---------------- Confirmação ----------------
+function confirmar(mensagem) {
+  return new Promise((resolve) => {
+    modal({
+      titulo: 'Confirmar',
+      largura: 'max-w-sm',
+      conteudo: `
+        <p class="text-sm mb-5">${mensagem}</p>
+        <div class="flex gap-2 justify-end">
+          <button data-fechar class="btn-ghost">Cancelar</button>
+          <button id="btn-conf" class="btn-danger">Confirmar</button>
+        </div>`,
+      onOpen: (body) => {
+        body.querySelector('#btn-conf').addEventListener('click', () => { fecharModal(); resolve(true); });
+      }
+    });
+    document.getElementById('modal-overlay').addEventListener('click', (e) => {
+      if (e.target.closest('[data-fechar]')) resolve(false);
+    });
+  });
+}
+
+// ---------------- Formulário por schema ----------------
+/**
+ * campos: [{ nome, label, tipo, opcoes, obrigatorio, placeholder, col }]
+ * tipos: text, textarea, number, email, tel, date, time, select, checkbox, file, coord
+ */
+function formHtml(campos, valores = {}) {
+  return `<form id="form-modal" class="grid grid-cols-2 gap-4">
+    ${campos.map((c) => campoHtml(c, valores[c.nome])).join('')}
+  </form>`;
+}
+
+function campoHtml(c, valor) {
+  const col = c.col === 1 ? 'col-span-1' : 'col-span-2';
+  const req = c.obrigatorio ? 'required' : '';
+  const v = (valor === undefined || valor === null) ? '' : String(valor);
+  const label = `<label class="block text-xs font-medium muted mb-1">${c.label}${c.obrigatorio ? ' *' : ''}</label>`;
+
+  let input = '';
+  switch (c.tipo) {
+    case 'textarea':
+      input = `<textarea name="${c.nome}" ${req} rows="3" class="input" placeholder="${c.placeholder || ''}">${v}</textarea>`;
+      break;
+    case 'select':
+      input = `<select name="${c.nome}" ${req} class="input">
+        <option value="">— selecione —</option>
+        ${(c.opcoes || []).map((o) => {
+          const val = typeof o === 'object' ? o.value : o;
+          const txt = typeof o === 'object' ? o.label : o;
+          return `<option value="${val}" ${String(val) === v ? 'selected' : ''}>${txt}</option>`;
+        }).join('')}
+      </select>`;
+      break;
+    case 'checkbox':
+      input = `<label class="flex items-center gap-2 mt-1">
+        <input type="checkbox" name="${c.nome}" ${v === 'true' || v === '1' || valor === true ? 'checked' : ''}
+          class="w-4 h-4 accent-brand-500"><span class="text-sm">${c.checkboxLabel || 'Sim'}</span></label>`;
+      break;
+    case 'file':
+      input = `<input type="file" name="${c.nome}" accept="${c.accept || 'image/*'}" class="input-file">`;
+      break;
+    case 'coord':
+      input = `<div class="flex gap-2">
+        <input type="number" step="any" name="latitude" value="${valor?.lat || ''}" placeholder="Latitude" class="input">
+        <input type="number" step="any" name="longitude" value="${valor?.lng || ''}" placeholder="Longitude" class="input">
+      </div>`;
+      break;
+    default:
+      input = `<input type="${c.tipo || 'text'}" name="${c.nome}" value="${v}" ${req}
+        placeholder="${c.placeholder || ''}" class="input">`;
+  }
+  return `<div class="${col}">${label}${input}</div>`;
+}
+
+/** Lê os valores de um <form> como objeto. */
+function lerForm(formEl) {
+  const dados = {};
+  new FormData(formEl).forEach((v, k) => { dados[k] = v; });
+  // checkboxes não marcadas não aparecem no FormData
+  formEl.querySelectorAll('input[type=checkbox]').forEach((cb) => {
+    dados[cb.name] = cb.checked;
+  });
+  return dados;
+}
+
+// ---------------- Tabela de dados ----------------
+/**
+ * colunas: [{ campo, label, formato?(valor,linha) }]
+ * acoes: { editar:fn, excluir:fn, extra:[{label,icone,fn}] }
+ */
+function tabela(dados, colunas, acoes = {}) {
+  if (!dados.length) {
+    return `<div class="text-center py-16 muted">
+      <div class="flex justify-center mb-3 opacity-40">${icon('relatorios', 'w-10 h-10')}</div>
+      Nenhum registro encontrado. Comece adicionando um novo.
+    </div>`;
+  }
+  const temAcoes = acoes.editar || acoes.excluir || (acoes.extra && acoes.extra.length);
+  return `<div class="overflow-x-auto rounded-xl border border-app">
+    <table class="w-full text-sm">
+      <thead>
+        <tr class="text-left muted border-b border-app bg-black/10">
+          ${colunas.map((c) => `<th class="px-4 py-3 font-medium whitespace-nowrap">${c.label}</th>`).join('')}
+          ${temAcoes ? '<th class="px-4 py-3 text-right">Ações</th>' : ''}
+        </tr>
+      </thead>
+      <tbody>
+        ${dados.map((linha) => `
+          <tr class="border-b border-app/60 hover:bg-black/10 transition-colors">
+            ${colunas.map((c) => {
+              const val = c.formato ? c.formato(linha[c.campo], linha) : (linha[c.campo] ?? '—');
+              return `<td class="px-4 py-3 whitespace-nowrap">${val}</td>`;
+            }).join('')}
+            ${temAcoes ? `<td class="px-4 py-3 text-right">
+              <div class="inline-flex gap-1 justify-end">
+                ${(acoes.extra || []).map((a, i) =>
+                  `<button data-extra="${i}" data-id="${linha.id}" class="icon-btn" title="${a.label}">${icon(a.icone, 'w-4 h-4')}</button>`).join('')}
+                ${acoes.editar ? `<button data-editar data-id="${linha.id}" class="icon-btn" title="Editar">${icon('editar', 'w-4 h-4')}</button>` : ''}
+                ${acoes.excluir ? `<button data-excluir data-id="${linha.id}" class="icon-btn hover:text-red-400" title="Excluir">${icon('lixeira', 'w-4 h-4')}</button>` : ''}
+              </div>
+            </td>` : ''}
+          </tr>`).join('')}
+      </tbody>
+    </table>
+  </div>`;
+}
+
+/** Liga os eventos de ação de uma tabela renderizada dentro de `container`. */
+function ligarAcoesTabela(container, dados, acoes) {
+  const acharLinha = (id) => dados.find((d) => String(d.id) === String(id));
+  container.querySelectorAll('[data-editar]').forEach((b) =>
+    b.addEventListener('click', () => acoes.editar(acharLinha(b.dataset.id))));
+  container.querySelectorAll('[data-excluir]').forEach((b) =>
+    b.addEventListener('click', () => acoes.excluir(acharLinha(b.dataset.id))));
+  container.querySelectorAll('[data-extra]').forEach((b) =>
+    b.addEventListener('click', () => acoes.extra[+b.dataset.extra].fn(acharLinha(b.dataset.id))));
+}
+
+// ---------------- Helpers de página ----------------
+function cabecalhoPagina(titulo, subtitulo, botaoHtml = '') {
+  return `<div class="flex flex-wrap items-end justify-between gap-4 mb-6">
+    <div>
+      <h1 class="font-display text-2xl font-bold">${titulo}</h1>
+      ${subtitulo ? `<p class="muted text-sm mt-1">${subtitulo}</p>` : ''}
+    </div>
+    ${botaoHtml}
+  </div>`;
+}
+
+function badge(texto, cor = 'brand') {
+  const cores = {
+    brand: 'bg-brand-500/15 text-brand-300 border-brand-500/30',
+    verde: 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30',
+    amber: 'bg-amber-500/15 text-amber-300 border-amber-500/30',
+    vermelho: 'bg-red-500/15 text-red-300 border-red-500/30',
+    cinza: 'bg-slate-500/15 text-slate-300 border-slate-500/30'
+  };
+  return `<span class="inline-block text-xs px-2 py-0.5 rounded-full border ${cores[cor] || cores.brand}">${texto}</span>`;
+}
+
+function spinner(txt = 'Carregando…') {
+  return `<div class="flex items-center justify-center gap-3 py-16 muted">
+    <div class="w-5 h-5 border-2 border-brand-500 border-t-transparent rounded-full animate-spin"></div>${txt}
+  </div>`;
+}
+
+/** Converte arquivo (input file) para base64 dataURL. */
+function arquivoParaBase64(file) {
+  return new Promise((resolve, reject) => {
+    const r = new FileReader();
+    r.onload = () => resolve(r.result);
+    r.onerror = reject;
+    r.readAsDataURL(file);
+  });
+}
+
+function formatarData(iso) {
+  if (!iso) return '—';
+  const d = new Date(iso);
+  if (isNaN(d)) return String(iso);
+  return d.toLocaleDateString('pt-BR');
+}
+Object.assign(__M['core/ui.js'], { toast, modal, fecharModal, confirmar, formHtml, lerForm, tabela, ligarAcoesTabela, cabecalhoPagina, badge, spinner, arquivoParaBase64, formatarData });
+})();
+
+/* ===== módulo: core/crud.js ===== */
+(function(){
+/**
+ * HuntPro Brasil — crud.js
+ * Fábrica de módulos CRUD. Recebe o nome da tabela e a config do schema e
+ * devolve um objeto com render(container). Cuida de: listar, buscar, criar,
+ * editar, excluir, upload de arquivos e selects que referenciam outras tabelas.
+ */
+const { api } = __M['api/index.js'];
+const { auth } = __M['core/auth.js'];
+const {
+  cabecalhoPagina, tabela, ligarAcoesTabela, modal, fecharModal, formHtml,
+  lerForm, toast, confirmar, spinner, arquivoParaBase64, badge
+} = __M['core/ui.js'];
+const { icon } = __M['core/icons.js'];
+function criarModuloCrud(tabela_nome, schema) {
+  return {
+    async render(container) {
+      const podeCriar = auth.pode(tabela_nome, 'create');
+      const podeEditar = auth.pode(tabela_nome, 'update');
+      const podeExcluir = auth.pode(tabela_nome, 'delete');
+
+      const botao = podeCriar
+        ? `<button id="btn-novo" class="btn-primary">${icon('mais', 'w-4 h-4')} Novo</button>`
+        : '';
+
+      container.innerHTML = `
+        <div class="p-6 md:p-8">
+          ${cabecalhoPagina(schema.titulo, schema.subtitulo || '', botao)}
+          <div class="mb-4 relative max-w-sm">
+            <span class="absolute left-3 top-1/2 -translate-y-1/2 muted">${icon('busca', 'w-4 h-4')}</span>
+            <input id="busca" class="input pl-9" placeholder="Buscar…">
+          </div>
+          <div id="lista">${spinner()}</div>
+        </div>`;
+
+      const listaEl = container.querySelector('#lista');
+      let dados = [];
+
+      const carregar = async (search = '') => {
+        listaEl.innerHTML = spinner();
+        try {
+          dados = await api.list(tabela_nome, search ? { search } : {});
+          renderTabela();
+        } catch (e) {
+          listaEl.innerHTML = `<div class="text-red-400 py-8">${e.message}</div>`;
+        }
+      };
+
+      const renderTabela = () => {
+        const acoes = {};
+        if (podeEditar) acoes.editar = (linha) => abrirForm(linha);
+        if (podeExcluir) acoes.excluir = (linha) => excluir(linha);
+        listaEl.innerHTML = tabela(dados, schema.colunas, acoes);
+        ligarAcoesTabela(listaEl, dados, acoes);
+      };
+
+      const excluir = async (linha) => {
+        if (!(await confirmar(`Excluir "${linha.nome || linha.id}"? Esta ação não pode ser desfeita.`))) return;
+        try {
+          await api.remove(tabela_nome, linha.id);
+          toast('Registro excluído.', 'sucesso');
+          carregar(container.querySelector('#busca').value);
+        } catch (e) { toast(e.message, 'erro'); }
+      };
+
+      const abrirForm = async (registro = null) => {
+        // resolve selects que referenciam outras tabelas
+        const campos = JSON.parse(JSON.stringify(schema.campos));
+        for (const c of campos) {
+          if (c.fonte) {
+            try {
+              const refs = await api.list(c.fonte, { limit: 500 });
+              c.opcoes = refs.map((r) => ({ value: r.id, label: r.nome || r.titulo || r.id }));
+            } catch (e) { c.opcoes = []; }
+          }
+        }
+
+        modal({
+          titulo: (registro ? 'Editar ' : 'Novo ') + schema.singular,
+          conteudo: `${formHtml(campos, registro || {})}
+            <div class="flex gap-2 justify-end mt-6 pt-4 border-t border-app">
+              <button data-fechar class="btn-ghost">Cancelar</button>
+              <button id="btn-salvar" class="btn-primary">${registro ? 'Salvar alterações' : 'Cadastrar'}</button>
+            </div>`,
+          onOpen: (body) => {
+            body.querySelector('#btn-salvar').addEventListener('click', () => salvar(body, campos, registro));
+          }
+        });
+      };
+
+      const salvar = async (body, campos, registro) => {
+        const form = body.querySelector('#form-modal');
+        if (!form.reportValidity()) return;
+        const btn = body.querySelector('#btn-salvar');
+        btn.disabled = true; btn.textContent = 'Salvando…';
+        try {
+          const valores = lerForm(form);
+
+          // upload de arquivos
+          for (const c of campos) {
+            if (c.tipo === 'file') {
+              const input = form.querySelector(`input[name="${c.nome}"]`);
+              const file = input?.files?.[0];
+              if (file) {
+                const base64 = await arquivoParaBase64(file);
+                const up = await api.upload({
+                  base64, mimeType: file.type, filename: file.name, modulo: tabela_nome
+                });
+                valores[c.nome] = up.url;
+              } else if (registro) {
+                valores[c.nome] = registro[c.nome] || '';
+              } else {
+                delete valores[c.nome];
+              }
+            }
+          }
+
+          if (registro) {
+            await api.update(tabela_nome, registro.id, valores);
+            toast('Alterações salvas.', 'sucesso');
+          } else {
+            await api.create(tabela_nome, valores);
+            toast(schema.singular + ' cadastrado.', 'sucesso');
+          }
+          fecharModal();
+          carregar(container.querySelector('#busca').value);
+        } catch (e) {
+          toast(e.message, 'erro');
+          btn.disabled = false; btn.textContent = 'Salvar';
+        }
+      };
+
+      // eventos
+      if (podeCriar) container.querySelector('#btn-novo').addEventListener('click', () => abrirForm());
+      let t;
+      container.querySelector('#busca').addEventListener('input', (e) => {
+        clearTimeout(t);
+        t = setTimeout(() => carregar(e.target.value), 350);
+      });
+
+      await carregar();
+    }
+  };
+}
+Object.assign(__M['core/crud.js'], { criarModuloCrud });
+})();
+
+/* ===== módulo: core/router.js ===== */
+(function(){
+/**
+ * HuntPro Brasil — router.js
+ * Roteamento por hash (#/rota). Renderiza o shell do app (sidebar + topbar)
+ * e monta o módulo correspondente na área de conteúdo.
+ */
+const { auth } = __M['core/auth.js'];
+const { store } = __M['core/store.js'];
+const { icon } = __M['core/icons.js'];
+const { CONFIG } = __M['config.js'];
+// Registro de rotas: cada módulo é carregado sob demanda (dynamic import).
+const ROTAS = [
+  { id: 'dashboard',   label: 'Dashboard',    grupo: 'Operação',   carregar: () => Promise.resolve(__M['modules/dashboard.js']) },
+  { id: 'mapa',        label: 'Mapa',         grupo: 'Operação',   carregar: () => Promise.resolve(__M['modules/mapa.js']) },
+  { id: 'ocorrencias', label: 'Ocorrências',  grupo: 'Operação',   carregar: () => Promise.resolve(__M['modules/ocorrencias.js']) },
+  { id: 'capturas',    label: 'Capturas',     grupo: 'Operação',   carregar: () => Promise.resolve(__M['modules/capturas.js']) },
+  { id: 'fazendas',    label: 'Fazendas',     grupo: 'Cadastros',  carregar: () => Promise.resolve(__M['modules/fazendas.js']) },
+  { id: 'caes',        label: 'Cães',         grupo: 'Cadastros',  carregar: () => Promise.resolve(__M['modules/caes.js']) },
+  { id: 'cameras',     label: 'Câmeras Trap', grupo: 'Cadastros',  carregar: () => Promise.resolve(__M['modules/cameras.js']) },
+  { id: 'equipes',     label: 'Equipes',      grupo: 'Cadastros',  carregar: () => Promise.resolve(__M['modules/equipes.js']) },
+  { id: 'parceiros',   label: 'Parceiros',    grupo: 'Rede',       carregar: () => Promise.resolve(__M['modules/parceiros.js']) },
+  { id: 'marketplace', label: 'Marketplace',  grupo: 'Rede',       carregar: () => Promise.resolve(__M['modules/marketplace.js']) },
+  { id: 'agenda',      label: 'Agenda',       grupo: 'Rede',       carregar: () => Promise.resolve(__M['modules/agenda.js']) },
+  { id: 'chat',        label: 'Chat',         grupo: 'Rede',       carregar: () => Promise.resolve(__M['modules/chat.js']) },
+  { id: 'relatorios',  label: 'Relatórios',   grupo: 'Gestão',     carregar: () => Promise.resolve(__M['modules/relatorios.js']) },
+  { id: 'usuarios',    label: 'Usuários',     grupo: 'Gestão',     carregar: () => Promise.resolve(__M['modules/usuarios.js']) },
+  { id: 'admin',       label: 'Administração',grupo: 'Gestão',     carregar: () => Promise.resolve(__M['modules/admin.js']) }
+];
+
+const ICONE_MODULO = {
+  dashboard: 'dashboard', mapa: 'mapa', ocorrencias: 'ocorrencias', capturas: 'capturas',
+  fazendas: 'fazendas', caes: 'caes', cameras: 'cameras', equipes: 'equipes',
+  parceiros: 'parceiros', marketplace: 'marketplace', agenda: 'agenda', chat: 'chat',
+  relatorios: 'relatorios', usuarios: 'usuarios', admin: 'admin'
+};
+
+const router = {
+  rotasVisiveis() {
+    return ROTAS.filter((r) => auth.pode(r.id, 'read') || r.id === 'dashboard');
+  },
+
+  iniciar() {
+    window.addEventListener('hashchange', () => this.resolver());
+    this.resolver();
+  },
+
+  ir(id) { window.location.hash = '#/' + id; },
+
+  async resolver() {
+    if (!auth.autenticado()) { this.telaLogin(); return; }
+
+    const hash = (window.location.hash || '#/dashboard').replace('#/', '');
+    const id = hash.split('/')[0] || 'dashboard';
+    let rota = ROTAS.find((r) => r.id === id);
+    if (!rota || (!auth.pode(id, 'read') && id !== 'dashboard')) rota = ROTAS[0];
+
+    this.renderShell(rota.id);
+    const alvo = document.getElementById('conteudo');
+    alvo.innerHTML = '<div class="p-8"></div>';
+    try {
+      const mod = await rota.carregar();
+      await mod.render(alvo, hash.split('/').slice(1));
+    } catch (e) {
+      console.error(e);
+      alvo.innerHTML = `<div class="p-8 text-red-400">Erro ao carregar o módulo "${rota.label}": ${e.message}</div>`;
+    }
+  },
+
+  telaLogin() {
+    Promise.resolve(__M['modules/login.js']).then((m) => m.render(document.getElementById('app')));
+  },
+
+  renderShell(ativo) {
+    const app = document.getElementById('app');
+    const u = store.usuario || {};
+    const grupos = {};
+    this.rotasVisiveis().forEach((r) => {
+      (grupos[r.grupo] = grupos[r.grupo] || []).push(r);
+    });
+
+    const menu = Object.entries(grupos).map(([grupo, rotas]) => `
+      <div class="mb-5">
+        <p class="px-3 mb-1 text-[10px] font-semibold uppercase tracking-widest muted opacity-70">${grupo}</p>
+        ${rotas.map((r) => `
+          <a href="#/${r.id}" class="nav-item ${r.id === ativo ? 'nav-ativo' : ''}">
+            ${icon(ICONE_MODULO[r.id], 'w-[18px] h-[18px]')}<span>${r.label}</span>
+          </a>`).join('')}
+      </div>`).join('');
+
+    app.innerHTML = `
+      <div class="flex h-screen overflow-hidden">
+        <!-- Sidebar -->
+        <aside id="sidebar" class="sidebar">
+          <div class="flex items-center gap-2 px-4 h-16 border-b border-app">
+            <span class="text-brand-400">${icon('boar', 'w-7 h-7')}</span>
+            <div>
+              <p class="font-display font-bold leading-none">HuntPro</p>
+              <p class="text-[10px] muted tracking-wide">BRASIL</p>
+            </div>
+          </div>
+          <nav class="flex-1 overflow-y-auto py-4 px-2">${menu}</nav>
+          <div class="border-t border-app p-3">
+            <div class="flex items-center gap-2 px-2 py-2">
+              <div class="w-8 h-8 rounded-full bg-brand-500/20 text-brand-300 flex items-center justify-center text-sm font-semibold">
+                ${(u.nome || '?').charAt(0).toUpperCase()}
+              </div>
+              <div class="min-w-0 flex-1">
+                <p class="text-sm font-medium truncate">${u.nome || 'Usuário'}</p>
+                <p class="text-[10px] muted truncate">${u.papel || ''}</p>
+              </div>
+              <button id="btn-sair" class="icon-btn" title="Sair">${icon('sair', 'w-4 h-4')}</button>
+            </div>
+          </div>
+        </aside>
+
+        <!-- Área principal -->
+        <div class="flex-1 flex flex-col min-w-0">
+          <header class="h-16 border-b border-app flex items-center justify-between px-4 md:px-6 shrink-0">
+            <button id="btn-menu" class="icon-btn md:hidden">${icon('menu')}</button>
+            <div class="flex-1"></div>
+            <button id="btn-tema" class="icon-btn" title="Alternar tema">
+              ${store.getTema() === 'dark' ? icon('sol') : icon('lua')}
+            </button>
+          </header>
+          <main id="conteudo" class="flex-1 overflow-y-auto"></main>
+        </div>
+      </div>
+      <div id="sidebar-overlay" class="fixed inset-0 bg-black/50 z-30 hidden md:hidden"></div>`;
+
+    document.getElementById('btn-sair').addEventListener('click', () => {
+      auth.logout(); window.location.hash = ''; this.telaLogin();
+    });
+    document.getElementById('btn-tema').addEventListener('click', () => {
+      store.alternarTema(); this.renderShell(ativo);
+    });
+    const sidebar = document.getElementById('sidebar');
+    const overlay = document.getElementById('sidebar-overlay');
+    document.getElementById('btn-menu')?.addEventListener('click', () => {
+      sidebar.classList.toggle('sidebar-aberta'); overlay.classList.toggle('hidden');
+    });
+    overlay.addEventListener('click', () => {
+      sidebar.classList.remove('sidebar-aberta'); overlay.classList.add('hidden');
+    });
+  }
+};
+Object.assign(__M['core/router.js'], { router });
+})();
+
+/* ===== módulo: core/schema.js ===== */
+(function(){
+/**
+ * HuntPro Brasil — schema.js
+ * Definição de formulários e colunas de tabela por módulo.
+ * Mantém consistência com as colunas do backend (backend/Config.gs).
+ * É o que permite que os módulos CRUD sejam genéricos.
+ */
+const { badge, formatarData } = __M['core/ui.js'];
+const UF = ['AC','AL','AP','AM','BA','CE','DF','ES','GO','MA','MT','MS','MG','PA','PB','PR','PE','PI','RJ','RN','RS','RO','RR','SC','SP','SE','TO'];
+
+const SCHEMAS = {
+  parceiros: {
+    titulo: 'Parceiros', singular: 'Parceiro', icone: 'parceiros',
+    subtitulo: 'Rede geral de contatos e parceiros',
+    campos: [
+      { nome: 'nome', label: 'Nome', tipo: 'text', obrigatorio: true },
+      { nome: 'tipo', label: 'Tipo', tipo: 'select', col: 1,
+        opcoes: ['Fazendeiro', 'Clube de Tiro', 'Loja', 'Fabricante', 'Veterinário', 'Criador de cães', 'Outro'] },
+      { nome: 'categoria', label: 'Categoria', tipo: 'text', col: 1 },
+      { nome: 'cidade', label: 'Cidade', tipo: 'text', col: 1 },
+      { nome: 'uf', label: 'UF', tipo: 'select', col: 1, opcoes: UF },
+      { nome: 'telefone', label: 'Telefone', tipo: 'tel', col: 1 },
+      { nome: 'email', label: 'E-mail', tipo: 'email', col: 1 },
+      { nome: 'site', label: 'Site', tipo: 'text', col: 1 },
+      { nome: 'latitude', label: 'Latitude', tipo: 'number', col: 1 },
+      { nome: 'longitude', label: 'Longitude', tipo: 'number', col: 1 },
+      { nome: 'observacoes', label: 'Observações', tipo: 'textarea' }
+    ],
+    colunas: [
+      { campo: 'nome', label: 'Nome' },
+      { campo: 'tipo', label: 'Tipo', formato: (v) => badge(v || 'Outro', 'brand') },
+      { campo: 'cidade', label: 'Cidade' },
+      { campo: 'telefone', label: 'Telefone' }
+    ]
+  },
+
+  usuarios: {
+    titulo: 'Usuários', singular: 'Usuário', icone: 'usuarios',
+    subtitulo: 'Membros com acesso à plataforma',
+    campos: [
+      { nome: 'nome', label: 'Nome', tipo: 'text', obrigatorio: true },
+      { nome: 'email', label: 'E-mail', tipo: 'email', obrigatorio: true },
+      { nome: 'telefone', label: 'Telefone', tipo: 'tel', col: 1 },
+      { nome: 'papel', label: 'Papel', tipo: 'select', col: 1,
+        opcoes: [
+          { value: 'superadmin', label: 'Super Admin' },
+          { value: 'admin', label: 'Administrador' },
+          { value: 'gestor', label: 'Gestor' },
+          { value: 'membro', label: 'Membro' }
+        ] },
+      { nome: 'ativo', label: 'Ativo', tipo: 'checkbox', checkboxLabel: 'Usuário ativo', col: 1 }
+    ],
+    colunas: [
+      { campo: 'nome', label: 'Nome' },
+      { campo: 'email', label: 'E-mail' },
+      { campo: 'papel', label: 'Papel', formato: (v) => badge(v || 'membro', 'brand') },
+      { campo: 'ativo', label: 'Status', formato: (v) => v === false || v === 'false' ? badge('Inativo', 'cinza') : badge('Ativo', 'verde') }
+    ]
+  },
+
+  equipes: {
+    titulo: 'Equipes', singular: 'Equipe', icone: 'equipes',
+    subtitulo: 'Grupos de manejo e caça controlada',
+    campos: [
+      { nome: 'nome', label: 'Nome da equipe', tipo: 'text', obrigatorio: true },
+      { nome: 'descricao', label: 'Descrição', tipo: 'textarea' },
+      { nome: 'cidade', label: 'Cidade', tipo: 'text', col: 1 },
+      { nome: 'uf', label: 'UF', tipo: 'select', col: 1, opcoes: UF }
+    ],
+    colunas: [
+      { campo: 'nome', label: 'Equipe' },
+      { campo: 'cidade', label: 'Cidade' },
+      { campo: 'uf', label: 'UF' },
+      { campo: 'criado_em', label: 'Criada em', formato: formatarData }
+    ]
+  },
+
+  fazendas: {
+    titulo: 'Fazendas', singular: 'Fazenda', icone: 'fazendas',
+    subtitulo: 'Áreas cadastradas para manejo',
+    campos: [
+      { nome: 'nome', label: 'Nome', tipo: 'text', obrigatorio: true },
+      { nome: 'proprietario', label: 'Proprietário', tipo: 'text' },
+      { nome: 'cidade', label: 'Cidade', tipo: 'text', col: 1 },
+      { nome: 'uf', label: 'UF', tipo: 'select', col: 1, opcoes: UF },
+      { nome: 'area_ha', label: 'Área (ha)', tipo: 'number', col: 1 },
+      { nome: 'contato', label: 'Contato', tipo: 'text', col: 1 },
+      { nome: 'latitude', label: 'Latitude', tipo: 'number', col: 1 },
+      { nome: 'longitude', label: 'Longitude', tipo: 'number', col: 1 },
+      { nome: 'observacoes', label: 'Observações', tipo: 'textarea' }
+    ],
+    colunas: [
+      { campo: 'nome', label: 'Fazenda' },
+      { campo: 'cidade', label: 'Cidade' },
+      { campo: 'uf', label: 'UF' },
+      { campo: 'area_ha', label: 'Área (ha)' },
+      { campo: 'proprietario', label: 'Proprietário' }
+    ]
+  },
+
+  ocorrencias: {
+    titulo: 'Ocorrências', singular: 'Ocorrência', icone: 'ocorrencias',
+    subtitulo: 'Danos, avistamentos e sinais de javali',
+    campos: [
+      { nome: 'tipo', label: 'Tipo', tipo: 'select', obrigatorio: true, col: 1,
+        opcoes: ['Dano à lavoura', 'Avistamento', 'Rastro/Sinal', 'Ataque a animais', 'Outro'] },
+      { nome: 'gravidade', label: 'Gravidade', tipo: 'select', col: 1,
+        opcoes: ['Baixa', 'Média', 'Alta', 'Crítica'] },
+      { nome: 'fazenda_id', label: 'Fazenda', tipo: 'select', col: 1, fonte: 'fazendas' },
+      { nome: 'status', label: 'Status', tipo: 'select', col: 1,
+        opcoes: ['aberta', 'em análise', 'resolvida'] },
+      { nome: 'data', label: 'Data', tipo: 'date', col: 1 },
+      { nome: 'latitude', label: 'Latitude', tipo: 'number', col: 1 },
+      { nome: 'longitude', label: 'Longitude', tipo: 'number', col: 1 },
+      { nome: 'descricao', label: 'Descrição', tipo: 'textarea' },
+      { nome: 'fotos', label: 'Foto', tipo: 'file' }
+    ],
+    colunas: [
+      { campo: 'tipo', label: 'Tipo' },
+      { campo: 'gravidade', label: 'Gravidade', formato: (v) => {
+        const cor = { 'Crítica': 'vermelho', 'Alta': 'amber', 'Média': 'brand', 'Baixa': 'cinza' }[v] || 'cinza';
+        return v ? badge(v, cor) : '—';
+      } },
+      { campo: 'status', label: 'Status', formato: (v) => badge(v || 'aberta', v === 'resolvida' ? 'verde' : 'amber') },
+      { campo: 'data', label: 'Data', formato: formatarData }
+    ]
+  },
+
+  capturas: {
+    titulo: 'Capturas', singular: 'Captura', icone: 'capturas',
+    subtitulo: 'Registro de abates e capturas com métricas',
+    campos: [
+      { nome: 'fazenda_id', label: 'Fazenda', tipo: 'select', col: 1, fonte: 'fazendas' },
+      { nome: 'equipe_id', label: 'Equipe', tipo: 'select', col: 1, fonte: 'equipes' },
+      { nome: 'data', label: 'Data', tipo: 'date', col: 1 },
+      { nome: 'quantidade', label: 'Qtd. javalis', tipo: 'number', col: 1 },
+      { nome: 'peso_total', label: 'Peso total (kg)', tipo: 'number', col: 1 },
+      { nome: 'metodo', label: 'Método', tipo: 'select', col: 1,
+        opcoes: ['Espera', 'Cães', 'Armadilha (gaiola)', 'Batida', 'Outro'] },
+      { nome: 'latitude', label: 'Latitude', tipo: 'number', col: 1 },
+      { nome: 'longitude', label: 'Longitude', tipo: 'number', col: 1 },
+      { nome: 'observacoes', label: 'Observações', tipo: 'textarea' },
+      { nome: 'fotos', label: 'Foto', tipo: 'file' }
+    ],
+    colunas: [
+      { campo: 'data', label: 'Data', formato: formatarData },
+      { campo: 'quantidade', label: 'Qtd.' },
+      { campo: 'peso_total', label: 'Peso (kg)' },
+      { campo: 'metodo', label: 'Método' }
+    ]
+  },
+
+  caes: {
+    titulo: 'Gestão de Cães', singular: 'Cão', icone: 'caes',
+    subtitulo: 'Matilha: linhagem, função e saúde',
+    campos: [
+      { nome: 'nome', label: 'Nome', tipo: 'text', obrigatorio: true },
+      { nome: 'raca', label: 'Raça', tipo: 'text', col: 1 },
+      { nome: 'funcao', label: 'Função', tipo: 'select', col: 1,
+        opcoes: ['Rastreador', 'Agarrador (pega)', 'Batedor', 'Misto'] },
+      { nome: 'sexo', label: 'Sexo', tipo: 'select', col: 1, opcoes: ['Macho', 'Fêmea'] },
+      { nome: 'nascimento', label: 'Nascimento', tipo: 'date', col: 1 },
+      { nome: 'chip', label: 'Chip/Registro', tipo: 'text', col: 1 },
+      { nome: 'status', label: 'Status', tipo: 'select', col: 1,
+        opcoes: ['Ativo', 'Descanso', 'Lesionado', 'Aposentado'] },
+      { nome: 'foto_url', label: 'Foto', tipo: 'file', col: 1 },
+      { nome: 'observacoes', label: 'Observações', tipo: 'textarea' }
+    ],
+    colunas: [
+      { campo: 'nome', label: 'Nome' },
+      { campo: 'raca', label: 'Raça' },
+      { campo: 'funcao', label: 'Função' },
+      { campo: 'status', label: 'Status', formato: (v) => badge(v || 'Ativo', v === 'Ativo' ? 'verde' : 'amber') }
+    ]
+  },
+
+  cameras: {
+    titulo: 'Câmeras Trap', singular: 'Câmera', icone: 'cameras',
+    subtitulo: 'Armadilhas fotográficas em campo',
+    campos: [
+      { nome: 'nome', label: 'Identificação', tipo: 'text', obrigatorio: true, col: 1 },
+      { nome: 'modelo', label: 'Modelo', tipo: 'text', col: 1 },
+      { nome: 'fazenda_id', label: 'Fazenda', tipo: 'select', col: 1, fonte: 'fazendas' },
+      { nome: 'status', label: 'Status', tipo: 'select', col: 1,
+        opcoes: ['Ativa', 'Inativa', 'Manutenção'] },
+      { nome: 'bateria', label: 'Bateria (%)', tipo: 'number', col: 1 },
+      { nome: 'latitude', label: 'Latitude', tipo: 'number', col: 1 },
+      { nome: 'longitude', label: 'Longitude', tipo: 'number', col: 1 },
+      { nome: 'ultima_foto_url', label: 'Última foto', tipo: 'file', col: 1 }
+    ],
+    colunas: [
+      { campo: 'nome', label: 'Câmera' },
+      { campo: 'modelo', label: 'Modelo' },
+      { campo: 'status', label: 'Status', formato: (v) => badge(v || 'Ativa', v === 'Ativa' ? 'verde' : 'cinza') },
+      { campo: 'bateria', label: 'Bateria', formato: (v) => v ? v + '%' : '—' }
+    ]
+  },
+
+  clubes: {
+    titulo: 'Clubes de Tiro', singular: 'Clube', icone: 'parceiros',
+    campos: [
+      { nome: 'nome', label: 'Nome', tipo: 'text', obrigatorio: true },
+      { nome: 'cidade', label: 'Cidade', tipo: 'text', col: 1 },
+      { nome: 'uf', label: 'UF', tipo: 'select', col: 1, opcoes: UF },
+      { nome: 'telefone', label: 'Telefone', tipo: 'tel', col: 1 },
+      { nome: 'email', label: 'E-mail', tipo: 'email', col: 1 },
+      { nome: 'modalidades', label: 'Modalidades', tipo: 'text' },
+      { nome: 'site', label: 'Site', tipo: 'text' }
+    ],
+    colunas: [
+      { campo: 'nome', label: 'Clube' }, { campo: 'cidade', label: 'Cidade' },
+      { campo: 'uf', label: 'UF' }, { campo: 'telefone', label: 'Telefone' }
+    ]
+  },
+
+  lojas: {
+    titulo: 'Lojas', singular: 'Loja', icone: 'marketplace',
+    campos: [
+      { nome: 'nome', label: 'Nome', tipo: 'text', obrigatorio: true },
+      { nome: 'categorias', label: 'Categorias', tipo: 'text' },
+      { nome: 'cidade', label: 'Cidade', tipo: 'text', col: 1 },
+      { nome: 'uf', label: 'UF', tipo: 'select', col: 1, opcoes: UF },
+      { nome: 'telefone', label: 'Telefone', tipo: 'tel', col: 1 },
+      { nome: 'email', label: 'E-mail', tipo: 'email', col: 1 },
+      { nome: 'site', label: 'Site', tipo: 'text' }
+    ],
+    colunas: [
+      { campo: 'nome', label: 'Loja' }, { campo: 'categorias', label: 'Categorias' },
+      { campo: 'cidade', label: 'Cidade' }, { campo: 'uf', label: 'UF' }
+    ]
+  },
+
+  fabricantes: {
+    titulo: 'Fabricantes', singular: 'Fabricante', icone: 'parceiros',
+    campos: [
+      { nome: 'nome', label: 'Nome', tipo: 'text', obrigatorio: true },
+      { nome: 'segmento', label: 'Segmento', tipo: 'text' },
+      { nome: 'telefone', label: 'Telefone', tipo: 'tel', col: 1 },
+      { nome: 'email', label: 'E-mail', tipo: 'email', col: 1 },
+      { nome: 'site', label: 'Site', tipo: 'text' }
+    ],
+    colunas: [
+      { campo: 'nome', label: 'Fabricante' }, { campo: 'segmento', label: 'Segmento' },
+      { campo: 'telefone', label: 'Telefone' }
+    ]
+  },
+
+  veterinarios: {
+    titulo: 'Veterinários', singular: 'Veterinário', icone: 'caes',
+    campos: [
+      { nome: 'nome', label: 'Nome', tipo: 'text', obrigatorio: true },
+      { nome: 'crmv', label: 'CRMV', tipo: 'text', col: 1 },
+      { nome: 'especialidade', label: 'Especialidade', tipo: 'text', col: 1 },
+      { nome: 'cidade', label: 'Cidade', tipo: 'text', col: 1 },
+      { nome: 'uf', label: 'UF', tipo: 'select', col: 1, opcoes: UF },
+      { nome: 'telefone', label: 'Telefone', tipo: 'tel', col: 1 },
+      { nome: 'email', label: 'E-mail', tipo: 'email', col: 1 }
+    ],
+    colunas: [
+      { campo: 'nome', label: 'Veterinário' }, { campo: 'crmv', label: 'CRMV' },
+      { campo: 'cidade', label: 'Cidade' }, { campo: 'telefone', label: 'Telefone' }
+    ]
+  }
+};
+
+// Fontes de referência (para preencher selects que apontam para outras tabelas).
+const REFERENCIAS = {
+  fazendas: { tabela: 'fazendas', rotulo: 'nome' },
+  equipes: { tabela: 'equipes', rotulo: 'nome' }
+};
+Object.assign(__M['core/schema.js'], { SCHEMAS, REFERENCIAS });
+})();
+
+/* ===== módulo: modules/admin.js ===== */
+(function(){
+/** HuntPro Brasil — módulo Painel Administrativo (permissões, logs, config). */
+const { api } = __M['api/index.js'];
+const { store } = __M['core/store.js'];
+const { cabecalhoPagina, spinner, tabela, badge, formatarData, toast } = __M['core/ui.js'];
+const { CONFIG } = __M['config.js'];
+async function render(container) {
+  container.innerHTML = `
+    <div class="p-6 md:p-8">
+      ${cabecalhoPagina('Painel Administrativo', 'Permissões, auditoria e configurações do sistema')}
+
+      <div class="grid md:grid-cols-3 gap-3 mb-8">
+        <div class="surface border border-app rounded-xl p-4">
+          <p class="muted text-xs mb-1">Tenant atual</p>
+          <p class="font-mono text-sm break-all">${store.usuario?.tenant_id || '—'}</p>
+        </div>
+        <div class="surface border border-app rounded-xl p-4">
+          <p class="muted text-xs mb-1">Backend ativo</p>
+          <p class="font-semibold">${CONFIG.BACKEND.toUpperCase()}</p>
+        </div>
+        <div class="surface border border-app rounded-xl p-4">
+          <p class="muted text-xs mb-1">Versão</p>
+          <p class="font-semibold">v${CONFIG.VERSAO}</p>
+        </div>
+      </div>
+
+      <h2 class="font-display text-lg font-semibold mb-3">Matriz de permissões</h2>
+      <div id="perm" class="mb-10">${spinner()}</div>
+
+      <h2 class="font-display text-lg font-semibold mb-3">Registro de auditoria (logs)</h2>
+      <div id="logs">${spinner()}</div>
+    </div>`;
+
+  // Permissões
+  try {
+    const perms = await api.list('permissoes', { limit: 1000 });
+    const permEl = container.querySelector('#perm');
+    permEl.innerHTML = tabela(perms.slice(0, 200), [
+      { campo: 'papel', label: 'Papel', formato: (v) => badge(v, 'brand') },
+      { campo: 'modulo', label: 'Módulo' },
+      { campo: 'ler', label: 'Ler', formato: sim },
+      { campo: 'escrever', label: 'Escrever', formato: sim },
+      { campo: 'excluir', label: 'Excluir', formato: sim }
+    ]);
+  } catch (e) {
+    container.querySelector('#perm').innerHTML = `<p class="muted text-sm">${e.message}</p>`;
+  }
+
+  // Logs
+  try {
+    const logs = await api.list('logs', { sort: 'criado_em', order: 'desc', limit: 100 });
+    container.querySelector('#logs').innerHTML = tabela(logs, [
+      { campo: 'criado_em', label: 'Quando', formato: (v) => new Date(v).toLocaleString('pt-BR') },
+      { campo: 'acao', label: 'Ação', formato: (v) => badge(v, corAcao(v)) },
+      { campo: 'entidade', label: 'Entidade' },
+      { campo: 'detalhe', label: 'Detalhe' }
+    ]);
+  } catch (e) {
+    container.querySelector('#logs').innerHTML = `<p class="muted text-sm">${e.message}</p>`;
+  }
+}
+
+function sim(v) {
+  const ok = v === true || v === 'true' || v === 'TRUE';
+  return ok ? badge('✓', 'verde') : badge('—', 'cinza');
+}
+function corAcao(a) {
+  return { create: 'verde', update: 'amber', delete: 'vermelho', login: 'brand', upload: 'brand' }[a] || 'cinza';
+}
+Object.assign(__M['modules/admin.js'], { render });
+})();
+
+/* ===== módulo: modules/agenda.js ===== */
+(function(){
+/** HuntPro Brasil — módulo Agenda/Eventos. */
+const { api } = __M['api/index.js'];
+const { store } = __M['core/store.js'];
+const {
+  cabecalhoPagina, spinner, modal, fecharModal, formHtml, lerForm, toast,
+  confirmar, formatarData, badge
+} = __M['core/ui.js'];
+const { icon } = __M['core/icons.js'];
+const CAMPOS = [
+  { nome: 'titulo', label: 'Título', tipo: 'text', obrigatorio: true },
+  { nome: 'tipo', label: 'Tipo', tipo: 'select', col: 1,
+    opcoes: ['Batida', 'Manutenção', 'Reunião', 'Evento', 'Veterinário', 'Outro'] },
+  { nome: 'status', label: 'Status', tipo: 'select', col: 1, opcoes: ['agendado', 'concluído', 'cancelado'] },
+  { nome: 'data', label: 'Data', tipo: 'date', col: 1, obrigatorio: true },
+  { nome: 'hora', label: 'Hora', tipo: 'time', col: 1 },
+  { nome: 'notas', label: 'Notas', tipo: 'textarea' }
+];
+
+async function render(container) {
+  container.innerHTML = `
+    <div class="p-6 md:p-8">
+      ${cabecalhoPagina('Agenda', 'Compromissos, batidas e eventos da equipe',
+        `<button id="btn-novo" class="btn-primary">${icon('mais', 'w-4 h-4')} Novo compromisso</button>`)}
+      <div id="lista">${spinner()}</div>
+    </div>`;
+
+  const listaEl = container.querySelector('#lista');
+  let dados = [];
+
+  const carregar = async () => {
+    listaEl.innerHTML = spinner();
+    try {
+      dados = await api.list('agenda', { sort: 'data', order: 'asc', limit: 500 });
+      renderLista();
+    } catch (e) { listaEl.innerHTML = `<div class="text-red-400 py-8">${e.message}</div>`; }
+  };
+
+  const renderLista = () => {
+    if (!dados.length) { listaEl.innerHTML = '<p class="muted py-16 text-center">Nenhum compromisso agendado.</p>'; return; }
+    const grupos = {};
+    dados.forEach((d) => { const k = d.data || 'Sem data'; (grupos[k] = grupos[k] || []).push(d); });
+    listaEl.innerHTML = Object.keys(grupos).sort().map((data) => `
+      <div class="mb-6">
+        <p class="text-xs font-semibold uppercase tracking-wider muted mb-2">${formatarData(data)}</p>
+        <div class="space-y-2">
+          ${grupos[data].map((e) => `
+            <div class="surface border border-app rounded-lg p-4 flex items-center gap-4">
+              <div class="text-center w-14 shrink-0">
+                <p class="font-display font-bold text-brand-300">${e.hora || '—'}</p>
+              </div>
+              <div class="flex-1 min-w-0">
+                <div class="flex items-center gap-2">
+                  <p class="font-medium truncate">${e.titulo}</p>
+                  ${badge(e.tipo || 'Outro', 'brand')}
+                  ${badge(e.status || 'agendado', e.status === 'concluído' ? 'verde' : e.status === 'cancelado' ? 'vermelho' : 'amber')}
+                </div>
+                ${e.notas ? `<p class="text-sm muted truncate">${e.notas}</p>` : ''}
+              </div>
+              <button data-excluir="${e.id}" class="icon-btn hover:text-red-400">${icon('lixeira', 'w-4 h-4')}</button>
+            </div>`).join('')}
+        </div>
+      </div>`).join('');
+
+    listaEl.querySelectorAll('[data-excluir]').forEach((b) => b.addEventListener('click', async () => {
+      if (await confirmar('Excluir este compromisso?')) {
+        try { await api.remove('agenda', b.dataset.excluir); toast('Removido.', 'sucesso'); carregar(); }
+        catch (e) { toast(e.message, 'erro'); }
+      }
+    }));
+  };
+
+  container.querySelector('#btn-novo').addEventListener('click', () => {
+    modal({
+      titulo: 'Novo compromisso',
+      conteudo: `${formHtml(CAMPOS, {})}
+        <div class="flex gap-2 justify-end mt-6 pt-4 border-t border-app">
+          <button data-fechar class="btn-ghost">Cancelar</button>
+          <button id="btn-salvar" class="btn-primary">Agendar</button>
+        </div>`,
+      onOpen: (body) => body.querySelector('#btn-salvar').addEventListener('click', async () => {
+        const form = body.querySelector('#form-modal');
+        if (!form.reportValidity()) return;
+        try {
+          const v = lerForm(form); v.usuario_id = store.usuario?.id || '';
+          await api.create('agenda', v); toast('Compromisso agendado.', 'sucesso'); fecharModal(); carregar();
+        } catch (e) { toast(e.message, 'erro'); }
+      })
+    });
+  });
+
+  await carregar();
+}
+Object.assign(__M['modules/agenda.js'], { render });
+})();
+
+/* ===== módulo: modules/caes.js ===== */
+(function(){
+/** HuntPro Brasil — módulo caes (CRUD via factory genérica). */
+const { criarModuloCrud } = __M['core/crud.js'];
+const { SCHEMAS } = __M['core/schema.js'];
+const { render } = criarModuloCrud('caes', SCHEMAS.caes);
+})();
+
+/* ===== módulo: modules/cameras.js ===== */
+(function(){
+/** HuntPro Brasil — módulo cameras (CRUD via factory genérica). */
+const { criarModuloCrud } = __M['core/crud.js'];
+const { SCHEMAS } = __M['core/schema.js'];
+const { render } = criarModuloCrud('cameras', SCHEMAS.cameras);
+})();
+
+/* ===== módulo: modules/capturas.js ===== */
+(function(){
+/** HuntPro Brasil — módulo capturas (CRUD via factory genérica). */
+const { criarModuloCrud } = __M['core/crud.js'];
+const { SCHEMAS } = __M['core/schema.js'];
+const { render } = criarModuloCrud('capturas', SCHEMAS.capturas);
+})();
+
+/* ===== módulo: modules/chat.js ===== */
+(function(){
+/** HuntPro Brasil — módulo Chat da equipe (canais + polling). */
+const { api } = __M['api/index.js'];
+const { store } = __M['core/store.js'];
+const { cabecalhoPagina, spinner, toast } = __M['core/ui.js'];
+const { icon } = __M['core/icons.js'];
+const CANAIS = ['geral', 'operacoes', 'matilha', 'marketplace'];
+let intervalo = null;
+
+async function render(container) {
+  let canal = 'geral';
+  if (intervalo) clearInterval(intervalo);
+
+  container.innerHTML = `
+    <div class="p-6 md:p-8 flex flex-col" style="height:calc(100vh - 4rem)">
+      ${cabecalhoPagina('Chat', 'Comunicação em tempo quase real com sua equipe')}
+      <div class="flex gap-2 mb-3">
+        ${CANAIS.map((c) => `
+          <button class="canal btn-ghost text-sm ${c === canal ? '!bg-brand-500/20 !text-brand-300' : ''}" data-canal="${c}"># ${c}</button>`).join('')}
+      </div>
+      <div id="mensagens" class="flex-1 overflow-y-auto surface border border-app rounded-xl p-4 space-y-3">${spinner()}</div>
+      <form id="form-msg" class="flex gap-2 mt-3">
+        <input id="txt" class="input flex-1" placeholder="Escreva uma mensagem…" autocomplete="off">
+        <button class="btn-primary px-4">${icon('enviar', 'w-4 h-4')}</button>
+      </form>
+    </div>`;
+
+  const msgsEl = container.querySelector('#mensagens');
+  const meuId = store.usuario?.id;
+
+  const carregar = async (scroll = false) => {
+    try {
+      const msgs = await api.chatListar(canal);
+      renderMsgs(msgs);
+      if (scroll) msgsEl.scrollTop = msgsEl.scrollHeight;
+    } catch (e) {
+      msgsEl.innerHTML = `<p class="text-red-400 text-sm">${e.message}</p>`;
+    }
+  };
+
+  const renderMsgs = (msgs) => {
+    if (!msgs.length) { msgsEl.innerHTML = '<p class="muted text-sm text-center py-8">Nenhuma mensagem em #' + canal + '. Comece a conversa!</p>'; return; }
+    const perto = msgsEl.scrollHeight - msgsEl.scrollTop - msgsEl.clientHeight < 80;
+    msgsEl.innerHTML = msgs.map((m) => {
+      const meu = m.remetente_id === meuId;
+      return `<div class="flex ${meu ? 'justify-end' : 'justify-start'}">
+        <div class="max-w-[75%] ${meu ? 'bg-brand-500/25' : 'bg-black/20'} rounded-2xl px-4 py-2">
+          ${!meu ? `<p class="text-[11px] font-semibold text-brand-300 mb-0.5">${m.remetente_nome || 'Usuário'}</p>` : ''}
+          <p class="text-sm whitespace-pre-wrap break-words">${escapar(m.texto)}</p>
+          <p class="text-[10px] muted mt-1 text-right">${hora(m.criado_em)}</p>
+        </div>
+      </div>`;
+    }).join('');
+    if (perto) msgsEl.scrollTop = msgsEl.scrollHeight;
+  };
+
+  const trocarCanal = (c) => {
+    canal = c;
+    container.querySelectorAll('.canal').forEach((b) => {
+      b.classList.toggle('!bg-brand-500/20', b.dataset.canal === c);
+      b.classList.toggle('!text-brand-300', b.dataset.canal === c);
+    });
+    carregar(true);
+  };
+
+  container.querySelectorAll('.canal').forEach((b) => b.addEventListener('click', () => trocarCanal(b.dataset.canal)));
+
+  container.querySelector('#form-msg').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const input = container.querySelector('#txt');
+    const texto = input.value.trim();
+    if (!texto) return;
+    input.value = '';
+    try { await api.chatEnviar(canal, texto); await carregar(true); }
+    catch (err) { toast(err.message, 'erro'); input.value = texto; }
+  });
+
+  await carregar(true);
+  intervalo = setInterval(() => carregar(false), 5000); // polling leve
+}
+
+function escapar(s) { const d = document.createElement('div'); d.textContent = s || ''; return d.innerHTML; }
+function hora(iso) { const d = new Date(iso); return isNaN(d) ? '' : d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }); }
+Object.assign(__M['modules/chat.js'], { render });
+})();
+
+/* ===== módulo: modules/clubes.js ===== */
+(function(){
+/** HuntPro Brasil — módulo clubes (CRUD via factory genérica). */
+const { criarModuloCrud } = __M['core/crud.js'];
+const { SCHEMAS } = __M['core/schema.js'];
+const { render } = criarModuloCrud('clubes', SCHEMAS.clubes);
+})();
+
+/* ===== módulo: modules/dashboard.js ===== */
+(function(){
+/** HuntPro Brasil — módulo Dashboard: KPIs, clima, fase da lua, gráfico e mapa. */
+const { api } = __M['api/index.js'];
+const { store } = __M['core/store.js'];
+const { icon } = __M['core/icons.js'];
+const { cabecalhoPagina, spinner, formatarData } = __M['core/ui.js'];
+const { CONFIG } = __M['config.js'];
+async function render(container) {
+  const u = store.usuario || {};
+  container.innerHTML = `
+    <div class="p-6 md:p-8">
+      ${cabecalhoPagina('Dashboard', `Olá, ${u.nome?.split(' ')[0] || 'caçador'} — visão geral da operação`)}
+      <div id="dash">${spinner('Carregando indicadores…')}</div>
+    </div>`;
+  const el = container.querySelector('#dash');
+
+  let dados;
+  try { dados = await api.dashboard(); }
+  catch (e) { el.innerHTML = `<div class="text-red-400 py-8">${e.message}</div>`; return; }
+
+  const k = dados.kpis;
+  const cards = [
+    { label: 'Fazendas', valor: k.fazendas, icone: 'fazendas' },
+    { label: 'Capturas', valor: k.capturas, icone: 'capturas' },
+    { label: 'Javalis abatidos', valor: k.javalis_abatidos, icone: 'boar', destaque: true },
+    { label: 'Peso total (kg)', valor: k.peso_total_kg, icone: 'relatorios' },
+    { label: 'Cães ativos', valor: k.caes, icone: 'caes' },
+    { label: 'Câmeras', valor: k.cameras, icone: 'cameras' },
+    { label: 'Ocorrências abertas', valor: k.ocorrencias_abertas, icone: 'ocorrencias' },
+    { label: 'Parceiros', valor: k.parceiros, icone: 'parceiros' }
+  ];
+
+  el.innerHTML = `
+    <div class="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-6">
+      ${cards.map((c) => `
+        <div class="surface border border-app rounded-xl p-4 ${c.destaque ? 'ring-1 ring-brand-500/40' : ''}">
+          <div class="flex items-center justify-between mb-2">
+            <span class="muted text-xs">${c.label}</span>
+            <span class="text-brand-400 opacity-70">${icon(c.icone, 'w-4 h-4')}</span>
+          </div>
+          <p class="font-display text-2xl font-bold">${c.valor ?? 0}</p>
+        </div>`).join('')}
+    </div>
+
+    <div class="grid lg:grid-cols-3 gap-4">
+      <div class="surface border border-app rounded-xl p-5 lg:col-span-2">
+        <h3 class="font-display font-semibold mb-4">Capturas por mês</h3>
+        <div id="grafico">${graficoBarras(dados.serie_capturas)}</div>
+      </div>
+      <div class="space-y-4">
+        <div id="clima" class="surface border border-app rounded-xl p-5">${spinner('Clima…')}</div>
+        <div class="surface border border-app rounded-xl p-5">${faseLua()}</div>
+      </div>
+    </div>
+
+    <div class="grid lg:grid-cols-2 gap-4 mt-4">
+      <div class="surface border border-app rounded-xl p-5">
+        <h3 class="font-display font-semibold mb-3">Últimas capturas</h3>
+        ${listaRecente(dados.ultimas_capturas, (c) => `${c.quantidade || 0} javali(s) · ${c.metodo || '—'}`)}
+      </div>
+      <div class="surface border border-app rounded-xl p-5">
+        <h3 class="font-display font-semibold mb-3">Últimas ocorrências</h3>
+        ${listaRecente(dados.ultimas_ocorrencias, (o) => `${o.tipo || '—'} · ${o.gravidade || ''}`)}
+      </div>
+    </div>`;
+
+  carregarClima(container.querySelector('#clima'));
+}
+
+function graficoBarras(serie) {
+  if (!serie || !serie.length) return '<p class="muted text-sm py-8 text-center">Sem dados de captura ainda.</p>';
+  const max = Math.max(...serie.map((s) => s.total), 1);
+  return `<div class="flex items-end gap-3 h-44">
+    ${serie.map((s) => {
+      const h = Math.round((s.total / max) * 100);
+      const [ano, mes] = s.mes.split('-');
+      return `<div class="flex-1 flex flex-col items-center gap-2">
+        <span class="text-xs font-semibold text-brand-300">${s.total}</span>
+        <div class="w-full bg-brand-500/80 rounded-t-md transition-all" style="height:${h}%;min-height:4px"></div>
+        <span class="text-[10px] muted">${mes}/${ano.slice(2)}</span>
+      </div>`;
+    }).join('')}
+  </div>`;
+}
+
+function listaRecente(itens, resumo) {
+  if (!itens || !itens.length) return '<p class="muted text-sm py-4">Nenhum registro recente.</p>';
+  return `<ul class="divide-y divide-app/60">
+    ${itens.map((i) => `<li class="py-2.5 flex items-center justify-between text-sm">
+      <span>${resumo(i)}</span>
+      <span class="muted text-xs">${formatarData(i.data || i.criado_em)}</span>
+    </li>`).join('')}
+  </ul>`;
+}
+
+// ---------------- Clima (Open-Meteo, sem chave) ----------------
+async function carregarClima(el) {
+  const render = (nome, temp, cod, vento) => {
+    el.innerHTML = `
+      <div class="flex items-center justify-between mb-1">
+        <h3 class="font-display font-semibold">Clima</h3>
+        <span class="text-brand-400">${icon('local', 'w-4 h-4')}</span>
+      </div>
+      <p class="text-xs muted mb-3">${nome}</p>
+      <div class="flex items-end gap-2">
+        <span class="font-display text-4xl font-bold">${Math.round(temp)}°</span>
+        <span class="muted text-sm mb-1">${descricaoTempo(cod)}</span>
+      </div>
+      <p class="text-xs muted mt-2">Vento: ${vento} km/h</p>`;
+  };
+
+  const buscar = async (lat, lon, nome) => {
+    try {
+      const url = `${CONFIG.CLIMA_API}?latitude=${lat}&longitude=${lon}&current=temperature_2m,weather_code,wind_speed_10m`;
+      const r = await fetch(url);
+      const j = await r.json();
+      render(nome, j.current.temperature_2m, j.current.weather_code, j.current.wind_speed_10m);
+    } catch (e) {
+      el.innerHTML = '<h3 class="font-display font-semibold mb-1">Clima</h3><p class="muted text-sm">Indisponível no momento.</p>';
+    }
+  };
+
+  if (navigator.geolocation) {
+    navigator.geolocation.getCurrentPosition(
+      (p) => buscar(p.coords.latitude, p.coords.longitude, 'Sua localização'),
+      () => buscar(CONFIG.MAPA_CENTRO[0], CONFIG.MAPA_CENTRO[1], 'Brasília, DF (padrão)'),
+      { timeout: 6000 }
+    );
+  } else {
+    buscar(CONFIG.MAPA_CENTRO[0], CONFIG.MAPA_CENTRO[1], 'Brasília, DF (padrão)');
+  }
+}
+
+function descricaoTempo(cod) {
+  if (cod === 0) return 'Céu limpo';
+  if (cod <= 3) return 'Parcialmente nublado';
+  if (cod <= 48) return 'Neblina';
+  if (cod <= 67) return 'Chuva';
+  if (cod <= 77) return 'Neve';
+  if (cod <= 82) return 'Pancadas';
+  return 'Tempestade';
+}
+
+// ---------------- Fase da lua ----------------
+function faseLua() {
+  const info = calcularFaseLua(new Date());
+  return `
+    <div class="flex items-center justify-between mb-1">
+      <h3 class="font-display font-semibold">Fase da lua</h3>
+      <span class="text-brand-400">${icon('lua', 'w-4 h-4')}</span>
+    </div>
+    <div class="flex items-center gap-3 mt-2">
+      <span class="text-4xl">${info.emoji}</span>
+      <div>
+        <p class="font-medium text-sm">${info.nome}</p>
+        <p class="text-xs muted">${info.iluminacao}% iluminada</p>
+      </div>
+    </div>
+    <p class="text-[11px] muted mt-3">Luas mais claras favorecem a atividade noturna do javali.</p>`;
+}
+
+function calcularFaseLua(data) {
+  const lp = 2551443; // período sinódico em segundos
+  const nova = new Date(2000, 0, 6, 18, 14, 0);
+  const fase = (((data.getTime() - nova.getTime()) / 1000) % lp) / lp;
+  const idade = fase * 29.53;
+  const ilum = Math.round((1 - Math.cos(fase * 2 * Math.PI)) / 2 * 100);
+  const fases = [
+    { max: 1.84, nome: 'Nova', emoji: '🌑' },
+    { max: 5.53, nome: 'Crescente côncava', emoji: '🌒' },
+    { max: 9.22, nome: 'Quarto crescente', emoji: '🌓' },
+    { max: 12.91, nome: 'Crescente gibosa', emoji: '🌔' },
+    { max: 16.61, nome: 'Cheia', emoji: '🌕' },
+    { max: 20.30, nome: 'Minguante gibosa', emoji: '🌖' },
+    { max: 23.99, nome: 'Quarto minguante', emoji: '🌗' },
+    { max: 27.68, nome: 'Minguante côncava', emoji: '🌘' },
+    { max: 30, nome: 'Nova', emoji: '🌑' }
+  ];
+  const f = fases.find((x) => idade < x.max) || fases[0];
+  return { nome: f.nome, emoji: f.emoji, iluminacao: ilum };
+}
+Object.assign(__M['modules/dashboard.js'], { render });
+})();
+
+/* ===== módulo: modules/equipes.js ===== */
+(function(){
+/** HuntPro Brasil — módulo equipes (CRUD via factory genérica). */
+const { criarModuloCrud } = __M['core/crud.js'];
+const { SCHEMAS } = __M['core/schema.js'];
+const { render } = criarModuloCrud('equipes', SCHEMAS.equipes);
+})();
+
+/* ===== módulo: modules/fabricantes.js ===== */
+(function(){
+/** HuntPro Brasil — módulo fabricantes (CRUD via factory genérica). */
+const { criarModuloCrud } = __M['core/crud.js'];
+const { SCHEMAS } = __M['core/schema.js'];
+const { render } = criarModuloCrud('fabricantes', SCHEMAS.fabricantes);
+})();
+
+/* ===== módulo: modules/fazendas.js ===== */
+(function(){
+/** HuntPro Brasil — módulo fazendas (CRUD via factory genérica). */
+const { criarModuloCrud } = __M['core/crud.js'];
+const { SCHEMAS } = __M['core/schema.js'];
+const { render } = criarModuloCrud('fazendas', SCHEMAS.fazendas);
+})();
+
+/* ===== módulo: modules/login.js ===== */
+(function(){
+/** HuntPro Brasil — módulo login/registro. */
+const { auth } = __M['core/auth.js'];
+const { router } = __M['core/router.js'];
+const { toast } = __M['core/ui.js'];
+const { icon } = __M['core/icons.js'];
+const { CONFIG } = __M['config.js'];
+function render(app) {
+  let modo = 'login';
+
+  const tela = () => {
+    app.innerHTML = `
+    <div class="min-h-screen grid md:grid-cols-2">
+      <!-- Painel de marca -->
+      <div class="hidden md:flex flex-col justify-between p-10 relative overflow-hidden bg-brand-950">
+        <div class="absolute inset-0 opacity-[0.07]" style="background-image:radial-gradient(circle at 20% 30%, var(--brand) 0, transparent 40%), radial-gradient(circle at 80% 70%, var(--brand) 0, transparent 40%)"></div>
+        <div class="relative flex items-center gap-3 text-brand-300">
+          ${icon('boar', 'w-10 h-10')}
+          <div>
+            <p class="font-display text-2xl font-bold text-app">HuntPro <span class="text-brand-400">Brasil</span></p>
+            <p class="text-xs muted tracking-widest">MANEJO INTELIGENTE DE JAVALIS</p>
+          </div>
+        </div>
+        <div class="relative">
+          <h2 class="font-display text-3xl font-bold leading-tight mb-4">Controle populacional<br>com dados no campo.</h2>
+          <p class="muted max-w-sm">Capturas georreferenciadas, ocorrências, matilha, câmeras trap, parceiros e relatórios — tudo em uma plataforma instalável no celular.</p>
+        </div>
+        <p class="relative text-xs muted">v${CONFIG.VERSAO} · Backend: ${CONFIG.BACKEND.toUpperCase()}</p>
+      </div>
+
+      <!-- Formulário -->
+      <div class="flex items-center justify-center p-6">
+        <div class="w-full max-w-sm">
+          <div class="md:hidden flex items-center gap-2 mb-8 text-brand-400 justify-center">
+            ${icon('boar', 'w-8 h-8')}<span class="font-display text-xl font-bold text-app">HuntPro Brasil</span>
+          </div>
+          <h1 class="font-display text-2xl font-bold mb-1">${modo === 'login' ? 'Entrar' : 'Criar conta'}</h1>
+          <p class="muted text-sm mb-6">${modo === 'login' ? 'Acesse sua conta para continuar.' : 'Cadastre-se e comece a registrar.'}</p>
+
+          <form id="form-auth" class="space-y-4">
+            ${modo === 'registro' ? `
+              <div>
+                <label class="block text-xs font-medium muted mb-1">Nome completo *</label>
+                <input name="nome" required class="input" placeholder="Seu nome">
+              </div>` : ''}
+            <div>
+              <label class="block text-xs font-medium muted mb-1">E-mail *</label>
+              <input type="email" name="email" required class="input" placeholder="voce@email.com">
+            </div>
+            <div>
+              <label class="block text-xs font-medium muted mb-1">Senha *</label>
+              <input type="password" name="senha" required class="input" placeholder="••••••••">
+            </div>
+            <button id="btn-auth" class="btn-primary w-full justify-center py-2.5">
+              ${modo === 'login' ? 'Entrar' : 'Criar conta'}
+            </button>
+          </form>
+
+          <p class="text-sm muted mt-5 text-center">
+            ${modo === 'login' ? 'Não tem conta?' : 'Já tem conta?'}
+            <button id="alternar" class="text-brand-400 hover:underline font-medium">
+              ${modo === 'login' ? 'Cadastre-se' : 'Entrar'}
+            </button>
+          </p>
+
+          ${modo === 'login' ? `<p class="text-[11px] muted mt-6 text-center leading-relaxed">
+            Instalação nova? Use o admin criado no Apps Script:<br>
+            <code class="text-brand-400">admin@huntpro.com / huntpro123</code></p>` : ''}
+        </div>
+      </div>
+    </div>`;
+
+    app.querySelector('#alternar').addEventListener('click', () => {
+      modo = modo === 'login' ? 'registro' : 'login'; tela();
+    });
+
+    app.querySelector('#form-auth').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const btn = app.querySelector('#btn-auth');
+      const dados = Object.fromEntries(new FormData(e.target));
+      btn.disabled = true; btn.textContent = 'Aguarde…';
+      try {
+        if (modo === 'login') await auth.login(dados.email, dados.senha);
+        else await auth.registrar(dados);
+        toast('Bem-vindo(a) ao HuntPro!', 'sucesso');
+        window.location.hash = '#/dashboard';
+        router.iniciar();
+      } catch (err) {
+        toast(err.message, 'erro');
+        btn.disabled = false;
+        btn.textContent = modo === 'login' ? 'Entrar' : 'Criar conta';
+      }
+    });
+  };
+
+  tela();
+}
+Object.assign(__M['modules/login.js'], { render });
+})();
+
+/* ===== módulo: modules/lojas.js ===== */
+(function(){
+/** HuntPro Brasil — módulo lojas (CRUD via factory genérica). */
+const { criarModuloCrud } = __M['core/crud.js'];
+const { SCHEMAS } = __M['core/schema.js'];
+const { render } = criarModuloCrud('lojas', SCHEMAS.lojas);
+})();
+
+/* ===== módulo: modules/mapa.js ===== */
+(function(){
+/** HuntPro Brasil — módulo Mapa Inteligente (Leaflet + OpenStreetMap). */
+const { api } = __M['api/index.js'];
+const { CONFIG } = __M['config.js'];
+const { cabecalhoPagina, spinner, formatarData } = __M['core/ui.js'];
+const { icon } = __M['core/icons.js'];
+const CAMADAS = [
+  { tabela: 'fazendas',    label: 'Fazendas',    cor: '#6b8f5e', emoji: '🌾' },
+  { tabela: 'ocorrencias', label: 'Ocorrências', cor: '#e0aa3e', emoji: '⚠️' },
+  { tabela: 'capturas',    label: 'Capturas',    cor: '#c0554d', emoji: '🎯' },
+  { tabela: 'cameras',     label: 'Câmeras',     cor: '#4d86c0', emoji: '📷' }
+];
+
+async function render(container) {
+  container.innerHTML = `
+    <div class="p-6 md:p-8">
+      ${cabecalhoPagina('Mapa Inteligente', 'Fazendas, ocorrências, capturas e câmeras georreferenciadas')}
+      <div class="flex flex-wrap gap-2 mb-4">
+        ${CAMADAS.map((c) => `
+          <label class="flex items-center gap-2 surface border border-app rounded-lg px-3 py-1.5 text-sm cursor-pointer">
+            <input type="checkbox" class="camada accent-brand-500" data-camada="${c.tabela}" checked>
+            <span style="color:${c.cor}">${c.emoji}</span> ${c.label}
+          </label>`).join('')}
+      </div>
+      <div id="mapa" class="rounded-xl overflow-hidden border border-app" style="height:70vh"></div>
+      <p class="muted text-xs mt-2">${icon('local', 'w-3 h-3')} Clique no mapa para copiar coordenadas.</p>
+    </div>`;
+
+  if (!window.L) {
+    container.querySelector('#mapa').innerHTML =
+      '<div class="p-8 text-red-400">Biblioteca de mapa (Leaflet) não carregou. Verifique sua conexão.</div>';
+    return;
+  }
+
+  const map = L.map('mapa').setView(CONFIG.MAPA_CENTRO, CONFIG.MAPA_ZOOM);
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    attribution: '© OpenStreetMap', maxZoom: 19
+  }).addTo(map);
+
+  const grupos = {};
+  const pontos = [];
+
+  for (const c of CAMADAS) {
+    grupos[c.tabela] = L.layerGroup().addTo(map);
+    try {
+      const registros = await api.list(c.tabela, { limit: 1000 });
+      registros.forEach((r) => {
+        const lat = parseFloat(String(r.latitude).replace(',', '.'));
+        const lng = parseFloat(String(r.longitude).replace(',', '.'));
+        if (isNaN(lat) || isNaN(lng)) return;
+        pontos.push([lat, lng]);
+        const marcador = L.circleMarker([lat, lng], {
+          radius: 8, color: c.cor, fillColor: c.cor, fillOpacity: 0.7, weight: 2
+        }).bindPopup(popupHtml(c, r));
+        grupos[c.tabela].addLayer(marcador);
+      });
+    } catch (e) { /* camada sem permissão é apenas ignorada */ }
+  }
+
+  if (pontos.length) map.fitBounds(pontos, { padding: [40, 40], maxZoom: 12 });
+
+  container.querySelectorAll('.camada').forEach((cb) => {
+    cb.addEventListener('change', () => {
+      const g = grupos[cb.dataset.camada];
+      if (cb.checked) map.addLayer(g); else map.removeLayer(g);
+    });
+  });
+
+  map.on('click', (e) => {
+    const txt = `${e.latlng.lat.toFixed(6)}, ${e.latlng.lng.toFixed(6)}`;
+    L.popup().setLatLng(e.latlng)
+      .setContent(`<b>Coordenadas</b><br>${txt}`).openOn(map);
+    navigator.clipboard?.writeText(txt);
+  });
+}
+
+function popupHtml(camada, r) {
+  const linhas = [];
+  if (camada.tabela === 'fazendas') {
+    linhas.push(`<b>${r.nome || 'Fazenda'}</b>`, r.cidade ? `${r.cidade}/${r.uf}` : '', r.area_ha ? `${r.area_ha} ha` : '');
+  } else if (camada.tabela === 'ocorrencias') {
+    linhas.push(`<b>${r.tipo || 'Ocorrência'}</b>`, r.gravidade || '', formatarData(r.data));
+  } else if (camada.tabela === 'capturas') {
+    linhas.push(`<b>Captura</b>`, `${r.quantidade || 0} javali(s)`, r.metodo || '', formatarData(r.data));
+  } else if (camada.tabela === 'cameras') {
+    linhas.push(`<b>${r.nome || 'Câmera'}</b>`, r.modelo || '', r.status || '');
+  }
+  return `<div style="font-size:12px;line-height:1.5">${linhas.filter(Boolean).join('<br>')}</div>`;
+}
+Object.assign(__M['modules/mapa.js'], { render });
+})();
+
+/* ===== módulo: modules/marketplace.js ===== */
+(function(){
+/** HuntPro Brasil — módulo Marketplace (produtos e equipamentos). */
+const { api } = __M['api/index.js'];
+const { auth } = __M['core/auth.js'];
+const { store } = __M['core/store.js'];
+const {
+  cabecalhoPagina, spinner, modal, fecharModal, formHtml, lerForm, toast,
+  confirmar, arquivoParaBase64, badge
+} = __M['core/ui.js'];
+const { icon } = __M['core/icons.js'];
+const CAMPOS = [
+  { nome: 'nome', label: 'Título', tipo: 'text', obrigatorio: true },
+  { nome: 'categoria', label: 'Categoria', tipo: 'select', col: 1,
+    opcoes: ['Armas/Acessórios', 'Óptica', 'Munição', 'Cães', 'Veículo', 'Equipamento', 'Outro'] },
+  { nome: 'preco', label: 'Preço (R$)', tipo: 'number', col: 1 },
+  { nome: 'condicao', label: 'Condição', tipo: 'select', col: 1, opcoes: ['Novo', 'Seminovo', 'Usado'] },
+  { nome: 'status', label: 'Status', tipo: 'select', col: 1, opcoes: ['disponível', 'reservado', 'vendido'] },
+  { nome: 'descricao', label: 'Descrição', tipo: 'textarea' },
+  { nome: 'fotos', label: 'Foto', tipo: 'file' }
+];
+
+async function render(container) {
+  const podeCriar = auth.pode('produtos', 'create');
+  container.innerHTML = `
+    <div class="p-6 md:p-8">
+      ${cabecalhoPagina('Marketplace', 'Compra e venda de equipamentos entre a rede',
+        podeCriar ? `<button id="btn-novo" class="btn-primary">${icon('mais', 'w-4 h-4')} Anunciar</button>` : '')}
+      <div id="grade">${spinner()}</div>
+    </div>`;
+
+  const grade = container.querySelector('#grade');
+  let dados = [];
+
+  const carregar = async () => {
+    grade.innerHTML = spinner();
+    try { dados = await api.list('produtos', { limit: 500 }); renderGrade(); }
+    catch (e) { grade.innerHTML = `<div class="text-red-400 py-8">${e.message}</div>`; }
+  };
+
+  const renderGrade = () => {
+    if (!dados.length) { grade.innerHTML = '<p class="muted py-16 text-center">Nenhum anúncio ainda. Seja o primeiro a anunciar.</p>'; return; }
+    grade.innerHTML = `<div class="grid sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+      ${dados.map((p) => cardHtml(p)).join('')}
+    </div>`;
+    grade.querySelectorAll('[data-excluir]').forEach((b) => b.addEventListener('click', async () => {
+      const p = dados.find((x) => x.id === b.dataset.excluir);
+      if (await confirmar(`Excluir o anúncio "${p.nome}"?`)) {
+        try { await api.remove('produtos', p.id); toast('Anúncio removido.', 'sucesso'); carregar(); }
+        catch (e) { toast(e.message, 'erro'); }
+      }
+    }));
+  };
+
+  const abrir = () => {
+    modal({
+      titulo: 'Novo anúncio',
+      conteudo: `${formHtml(CAMPOS, {})}
+        <div class="flex gap-2 justify-end mt-6 pt-4 border-t border-app">
+          <button data-fechar class="btn-ghost">Cancelar</button>
+          <button id="btn-salvar" class="btn-primary">Publicar</button>
+        </div>`,
+      onOpen: (body) => body.querySelector('#btn-salvar').addEventListener('click', () => salvar(body))
+    });
+  };
+
+  const salvar = async (body) => {
+    const form = body.querySelector('#form-modal');
+    if (!form.reportValidity()) return;
+    const btn = body.querySelector('#btn-salvar'); btn.disabled = true; btn.textContent = 'Publicando…';
+    try {
+      const v = lerForm(form);
+      const file = form.querySelector('input[name="fotos"]')?.files?.[0];
+      if (file) {
+        const up = await api.upload({ base64: await arquivoParaBase64(file), mimeType: file.type, filename: file.name, modulo: 'marketplace' });
+        v.fotos = up.url;
+      } else delete v.fotos;
+      v.vendedor_id = store.usuario?.id || '';
+      await api.create('produtos', v);
+      toast('Anúncio publicado.', 'sucesso'); fecharModal(); carregar();
+    } catch (e) { toast(e.message, 'erro'); btn.disabled = false; btn.textContent = 'Publicar'; }
+  };
+
+  if (podeCriar) container.querySelector('#btn-novo').addEventListener('click', abrir);
+  await carregar();
+}
+
+function cardHtml(p) {
+  const meu = p.vendedor_id === store.usuario?.id || auth.pode('produtos', 'delete');
+  const corStatus = { 'disponível': 'verde', 'reservado': 'amber', 'vendido': 'cinza' }[p.status] || 'brand';
+  const preco = p.preco ? Number(p.preco).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) : 'A combinar';
+  return `<div class="surface border border-app rounded-xl overflow-hidden flex flex-col">
+    <div class="aspect-video bg-black/20 flex items-center justify-center overflow-hidden">
+      ${p.fotos ? `<img src="${p.fotos}" class="w-full h-full object-cover" alt="${p.nome}" onerror="this.style.display='none'">`
+                : `<span class="muted opacity-40">${icon('marketplace', 'w-10 h-10')}</span>`}
+    </div>
+    <div class="p-4 flex-1 flex flex-col">
+      <div class="flex items-start justify-between gap-2 mb-1">
+        <h3 class="font-medium leading-tight">${p.nome}</h3>
+        ${badge(p.status || 'disponível', corStatus)}
+      </div>
+      <p class="text-xs muted mb-2">${p.categoria || ''} ${p.condicao ? '· ' + p.condicao : ''}</p>
+      <p class="text-sm line-clamp-2 muted flex-1">${p.descricao || ''}</p>
+      <div class="flex items-center justify-between mt-3 pt-3 border-t border-app">
+        <span class="font-display font-bold text-brand-300">${preco}</span>
+        ${meu ? `<button data-excluir="${p.id}" class="icon-btn hover:text-red-400">${icon('lixeira', 'w-4 h-4')}</button>` : ''}
+      </div>
+    </div>
+  </div>`;
+}
+Object.assign(__M['modules/marketplace.js'], { render });
+})();
+
+/* ===== módulo: modules/ocorrencias.js ===== */
+(function(){
+/** HuntPro Brasil — módulo ocorrencias (CRUD via factory genérica). */
+const { criarModuloCrud } = __M['core/crud.js'];
+const { SCHEMAS } = __M['core/schema.js'];
+const { render } = criarModuloCrud('ocorrencias', SCHEMAS.ocorrencias);
+})();
+
+/* ===== módulo: modules/parceiros.js ===== */
+(function(){
+/** HuntPro Brasil — módulo Parceiros (abas: geral, clubes, lojas, fabricantes, vets). */
+const { criarModuloCrud } = __M['core/crud.js'];
+const { SCHEMAS } = __M['core/schema.js'];
+const { cabecalhoPagina } = __M['core/ui.js'];
+const ABAS = [
+  { id: 'parceiros', label: 'Todos' },
+  { id: 'clubes', label: 'Clubes de Tiro' },
+  { id: 'lojas', label: 'Lojas' },
+  { id: 'fabricantes', label: 'Fabricantes' },
+  { id: 'veterinarios', label: 'Veterinários' }
+];
+
+async function render(container) {
+  let ativa = 'parceiros';
+
+  container.innerHTML = `
+    <div class="p-6 md:p-8">
+      ${cabecalhoPagina('Parceiros', 'Rede de fazendeiros, clubes, lojas, fabricantes e veterinários')}
+      <div class="flex flex-wrap gap-1 mb-6 border-b border-app">
+        ${ABAS.map((a) => `
+          <button class="aba px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors
+            ${a.id === ativa ? 'border-brand-500 text-brand-300' : 'border-transparent muted hover:text-app'}"
+            data-aba="${a.id}">${a.label}</button>`).join('')}
+      </div>
+      <div id="aba-conteudo"></div>
+    </div>`;
+
+  const conteudo = container.querySelector('#aba-conteudo');
+
+  const montar = async (id) => {
+    ativa = id;
+    container.querySelectorAll('.aba').forEach((b) => {
+      const atv = b.dataset.aba === id;
+      b.className = `aba px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors ${
+        atv ? 'border-brand-500 text-brand-300' : 'border-transparent muted hover:text-app'}`;
+    });
+    // reaproveita a factory CRUD, mas sem o cabeçalho duplicado
+    const mod = criarModuloCrud(id, { ...SCHEMAS[id], titulo: '', subtitulo: '' });
+    await mod.render(conteudo);
+    // remove o espaçamento extra do cabeçalho interno vazio
+    const inner = conteudo.querySelector('.p-6, .p-8, .md\\:p-8');
+    if (inner) inner.classList.remove('p-6', 'p-8', 'md:p-8');
+  };
+
+  container.querySelectorAll('.aba').forEach((b) =>
+    b.addEventListener('click', () => montar(b.dataset.aba)));
+
+  await montar('parceiros');
+}
+Object.assign(__M['modules/parceiros.js'], { render });
+})();
+
+/* ===== módulo: modules/relatorios.js ===== */
+(function(){
+/** HuntPro Brasil — módulo Relatórios (capturas e ocorrências) com exportação CSV. */
+const { api } = __M['api/index.js'];
+const { cabecalhoPagina, spinner, toast, formatarData } = __M['core/ui.js'];
+const { icon } = __M['core/icons.js'];
+async function render(container) {
+  container.innerHTML = `
+    <div class="p-6 md:p-8">
+      ${cabecalhoPagina('Relatórios', 'Consolidação de capturas e ocorrências')}
+      <div class="flex flex-wrap items-end gap-3 mb-6">
+        <div>
+          <label class="block text-xs muted mb-1">De</label>
+          <input type="date" id="de" class="input">
+        </div>
+        <div>
+          <label class="block text-xs muted mb-1">Até</label>
+          <input type="date" id="ate" class="input">
+        </div>
+        <button id="gerar" class="btn-primary">Gerar</button>
+        <button id="csv" class="btn-ghost">${icon('upload', 'w-4 h-4')} Exportar CSV</button>
+      </div>
+      <div id="rel">${spinner('Gerando relatório…')}</div>
+    </div>`;
+
+  const relEl = container.querySelector('#rel');
+  let ultimo = null;
+
+  const gerar = async () => {
+    relEl.innerHTML = spinner('Gerando relatório…');
+    try {
+      const de = container.querySelector('#de').value;
+      const ate = container.querySelector('#ate').value;
+      const [cap, oc] = await Promise.all([
+        api.report('capturas', { de, ate }),
+        api.report('ocorrencias', {})
+      ]);
+      ultimo = cap;
+      relEl.innerHTML = `
+        <div class="grid md:grid-cols-3 gap-3 mb-6">
+          ${kpi('Registros de captura', cap.total_registros)}
+          ${kpi('Total de javalis', cap.total_javalis, true)}
+          ${kpi('Ocorrências', oc.total)}
+        </div>
+
+        <div class="grid lg:grid-cols-2 gap-4">
+          ${bloco('Capturas por método', cap.por_metodo)}
+          ${bloco('Ocorrências por tipo', oc.por_tipo)}
+          ${bloco('Ocorrências por status', oc.por_status)}
+          ${blocoFazenda('Javalis por fazenda', cap.por_fazenda)}
+        </div>
+
+        <h3 class="font-display font-semibold mt-8 mb-3">Detalhamento de capturas</h3>
+        <div class="overflow-x-auto rounded-xl border border-app">
+          <table class="w-full text-sm">
+            <thead><tr class="text-left muted border-b border-app bg-black/10">
+              <th class="px-4 py-3">Data</th><th class="px-4 py-3">Qtd.</th>
+              <th class="px-4 py-3">Peso (kg)</th><th class="px-4 py-3">Método</th></tr></thead>
+            <tbody>
+              ${cap.linhas.map((l) => `<tr class="border-b border-app/60">
+                <td class="px-4 py-2">${formatarData(l.data)}</td>
+                <td class="px-4 py-2">${l.quantidade || 0}</td>
+                <td class="px-4 py-2">${l.peso_total || 0}</td>
+                <td class="px-4 py-2">${l.metodo || '—'}</td></tr>`).join('') ||
+                '<tr><td colspan="4" class="px-4 py-6 text-center muted">Sem dados no período.</td></tr>'}
+            </tbody>
+          </table>
+        </div>`;
+    } catch (e) { relEl.innerHTML = `<div class="text-red-400 py-8">${e.message}</div>`; }
+  };
+
+  container.querySelector('#gerar').addEventListener('click', gerar);
+  container.querySelector('#csv').addEventListener('click', () => {
+    if (!ultimo || !ultimo.linhas.length) { toast('Gere um relatório com dados primeiro.', 'aviso'); return; }
+    exportarCSV(ultimo.linhas);
+  });
+
+  await gerar();
+}
+
+function kpi(label, valor, destaque) {
+  return `<div class="surface border border-app rounded-xl p-4 ${destaque ? 'ring-1 ring-brand-500/40' : ''}">
+    <p class="muted text-xs mb-1">${label}</p>
+    <p class="font-display text-2xl font-bold">${valor ?? 0}</p></div>`;
+}
+
+function bloco(titulo, obj) {
+  const entradas = Object.entries(obj || {});
+  return `<div class="surface border border-app rounded-xl p-5">
+    <h3 class="font-display font-semibold mb-3">${titulo}</h3>
+    ${entradas.length ? `<ul class="space-y-2">${entradas.map(([k, v]) => `
+      <li class="flex justify-between text-sm"><span>${k}</span><span class="font-semibold text-brand-300">${v}</span></li>`).join('')}</ul>`
+      : '<p class="muted text-sm">Sem dados.</p>'}
+  </div>`;
+}
+
+function blocoFazenda(titulo, obj) {
+  const entradas = Object.entries(obj || {});
+  return `<div class="surface border border-app rounded-xl p-5">
+    <h3 class="font-display font-semibold mb-3">${titulo}</h3>
+    ${entradas.length ? `<ul class="space-y-2">${entradas.map(([k, v]) => `
+      <li class="flex justify-between text-sm"><span class="truncate muted">${k || 'sem fazenda'}</span><span class="font-semibold text-brand-300">${v}</span></li>`).join('')}</ul>`
+      : '<p class="muted text-sm">Sem dados.</p>'}
+  </div>`;
+}
+
+function exportarCSV(linhas) {
+  const cols = ['data', 'quantidade', 'peso_total', 'metodo', 'latitude', 'longitude', 'observacoes'];
+  const cabecalho = cols.join(';');
+  const corpo = linhas.map((l) => cols.map((c) => `"${String(l[c] ?? '').replace(/"/g, '""')}"`).join(';')).join('\n');
+  const blob = new Blob(['\uFEFF' + cabecalho + '\n' + corpo], { type: 'text/csv;charset=utf-8' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `huntpro_capturas_${new Date().toISOString().slice(0, 10)}.csv`;
+  a.click();
+  toast('CSV exportado.', 'sucesso');
+}
+Object.assign(__M['modules/relatorios.js'], { render });
+})();
+
+/* ===== módulo: modules/usuarios.js ===== */
+(function(){
+/** HuntPro Brasil — módulo usuarios (CRUD via factory genérica). */
+const { criarModuloCrud } = __M['core/crud.js'];
+const { SCHEMAS } = __M['core/schema.js'];
+const { render } = criarModuloCrud('usuarios', SCHEMAS.usuarios);
+})();
+
+/* ===== módulo: modules/veterinarios.js ===== */
+(function(){
+/** HuntPro Brasil — módulo veterinarios (CRUD via factory genérica). */
+const { criarModuloCrud } = __M['core/crud.js'];
+const { SCHEMAS } = __M['core/schema.js'];
+const { render } = criarModuloCrud('veterinarios', SCHEMAS.veterinarios);
+})();
+
+/* ===== bootstrap: app.js ===== */
+/** HuntPro Brasil — app.js (bootstrap principal). */
+const { store } = __M['core/store.js'];
+const { auth } = __M['core/auth.js'];
+const { router } = __M['core/router.js'];
+// tema salvo
+store.setTema(store.getTema());
+
+// sessão + rota inicial
+auth.iniciar();
+
+if (auth.autenticado()) {
+  router.iniciar();
+} else {
+  router.telaLogin();
+}
+
+// registra o service worker (PWA)
+/* service worker omitido na versão de arquivo único */
+})();
+</script>
+</body>
+</html>
