@@ -129,14 +129,26 @@ var STATE = {
 
 var VIEWS = {}; // registrado abaixo
 
+/* ============================================================
+   >>>>>>  COLE AQUI A SUA URL /exec DO APPS SCRIPT  <<<<<<
+   (Implantar > App da Web > "Qualquer pessoa". Se publicar nova
+    versão, use "Gerenciar implantações" p/ manter a mesma URL.)
+   ============================================================ */
+var API_URL = 'https://script.google.com/macros/s/AKfycby_LWJgdy0nffHnXE0Zi9eHviuVgiDPbByini4eyWyqsotc3wsUz0zLMV3-ZBRUvp7rXQ/exec';
+
+/* Chama a API via fetch. Corpo text/plain = requisição "simples":
+   o navegador NÃO dispara preflight OPTIONS (que o Apps Script não responde). */
 function server(fn){
   var args = Array.prototype.slice.call(arguments,1);
-  return new Promise(function(res,rej){
-    var runner = google.script.run.withSuccessHandler(res).withFailureHandler(function(e){
-      toast('Erro: '+(e && e.message ? e.message : e)); rej(e);
-    });
-    runner[fn].apply(runner, args);
-  });
+  return fetch(API_URL, {
+    method: 'POST',
+    redirect: 'follow',
+    body: JSON.stringify({ action: fn, args: args })
+    // sem header Content-Type -> vira text/plain automaticamente (sem CORS preflight)
+  })
+  .then(function(r){ return r.json(); })
+  .then(function(j){ if(!j.ok) throw new Error(j.error || 'Erro no servidor'); return j.data; })
+  .catch(function(e){ toast('Erro: '+(e && e.message ? e.message : e)); throw e; });
 }
 
 function nav(view, pushToStack){
@@ -221,7 +233,21 @@ function bindFoto(inputId,prevId){
   inp.addEventListener('change',function(){
     var f=inp.files[0]; if(!f) return;
     var r=new FileReader();
-    r.onload=function(){ inp._data=r.result; prev.src=r.result; prev.style.display='block'; };
+    r.onload=function(){
+      var img=new Image();
+      img.onload=function(){
+        // redimensiona p/ no máx 1280px e comprime em JPEG (economiza rede/quota)
+        var max=1280, w=img.width, h=img.height;
+        if(w>max||h>max){ if(w>h){ h=Math.round(h*max/w); w=max; } else { w=Math.round(w*max/h); h=max; } }
+        var cv=document.createElement('canvas'); cv.width=w; cv.height=h;
+        cv.getContext('2d').drawImage(img,0,0,w,h);
+        try { inp._data=cv.toDataURL('image/jpeg',0.82); }
+        catch(e){ inp._data=r.result; } // fallback se o canvas falhar
+        prev.src=inp._data; prev.style.display='block';
+      };
+      img.onerror=function(){ inp._data=r.result; prev.src=r.result; prev.style.display='block'; };
+      img.src=r.result;
+    };
     r.readAsDataURL(f);
   });
 }
@@ -679,7 +705,9 @@ server('apiBoot').then(function(b){
   STATE.stack=['home'];
   render();
 }).catch(function(){
-  app('<div class="empty">Não foi possível iniciar. Verifique se o script está vinculado à planilha e reimplante o app.</div>');
+  app('<div class="empty"><div class="big">⚠️</div>Não consegui falar com o servidor.<br><br>'+
+      'Verifique se a <b>API_URL</b> no topo do index.html é a sua URL <b>/exec</b> e se a implantação está como '+
+      '<b>“Qualquer pessoa”</b> (Executar como: você).</div>');
 });
 </script>
 </body>
