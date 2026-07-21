@@ -87,7 +87,7 @@ input,textarea,select{font-family:inherit}
   background:linear-gradient(180deg,var(--bg2),var(--bg));border-right:1px solid var(--border-soft);
   padding:26px 18px;display:flex;flex-direction:column;gap:6px;position:sticky;top:0;height:100vh;
 }
-.side-logo{height:38px;object-fit:contain;object-position:left;margin:2px 6px 26px}
+.side-logo{height:58px;object-fit:contain;object-position:left;margin:2px 4px 24px}
 .nav-label{font-size:.68rem;text-transform:uppercase;letter-spacing:.14em;color:var(--muted2);margin:16px 10px 6px;font-weight:700}
 .nav-item{
   display:flex;align-items:center;gap:12px;padding:11px 12px;border-radius:11px;color:var(--muted);
@@ -97,11 +97,19 @@ input,textarea,select{font-family:inherit}
 .nav-item:hover{background:var(--surface);color:var(--text)}
 .nav-item.active{background:linear-gradient(135deg,rgba(44,166,224,.16),rgba(44,166,224,.04));color:var(--cyan-bright);border-color:rgba(44,166,224,.3)}
 .side-foot{margin-top:auto;border-top:1px solid var(--border-soft);padding-top:16px}
-.user-chip{display:flex;align-items:center;gap:11px;padding:6px 8px}
-.avatar{width:38px;height:38px;border-radius:11px;background:linear-gradient(135deg,var(--cyan),var(--cyan-deep));
+.user-row{display:flex;align-items:center;gap:8px}
+.user-chip{flex:1;min-width:0;display:flex;align-items:center;gap:11px;padding:7px 9px;border-radius:11px;
+  background:transparent;border:1px solid transparent;cursor:pointer;text-align:left;transition:.15s}
+.user-chip:hover{background:var(--surface);border-color:var(--border-soft)}
+.avatar{width:38px;height:38px;border-radius:11px;background:linear-gradient(135deg,var(--cyan),var(--cyan-deep));overflow:hidden;
   display:grid;place-items:center;font-weight:700;color:#06121D;font-family:var(--f-disp);flex:none}
-.user-chip .nm{font-size:.85rem;font-weight:600;line-height:1.2}
-.user-chip .rl{font-size:.72rem;color:var(--muted2);text-transform:capitalize}
+.avatar img{width:100%;height:100%;object-fit:cover;display:block}
+.user-chip .nm{font-size:.85rem;font-weight:600;line-height:1.2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.user-chip .rl{font-size:.72rem;color:var(--muted2);text-transform:capitalize;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.logout-btn{width:34px;height:34px;flex:none;border-radius:10px;border:1px solid var(--border-soft);background:var(--surface);
+  color:var(--muted);display:grid;place-items:center;cursor:pointer;transition:.15s}
+.logout-btn:hover{color:var(--red);border-color:rgba(242,107,132,.45);background:rgba(242,107,132,.08)}
+.logout-btn svg{width:17px;height:17px;stroke-width:1.9}
 .main{padding:32px 40px 60px;min-width:0}
 .topbar{display:flex;align-items:center;justify-content:space-between;margin-bottom:28px;gap:16px;flex-wrap:wrap}
 .page-title{font-size:1.6rem;font-weight:700}
@@ -324,6 +332,7 @@ function toast(msg,type=''){
 
 /* ---------- ícones ---------- */
 const ICON = {
+  camera:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2Z"/><circle cx="12" cy="13" r="4"/></svg>',
   dash:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><rect x="3" y="3" width="7" height="9" rx="1.5"/><rect x="14" y="3" width="7" height="5" rx="1.5"/><rect x="14" y="12" width="7" height="9" rx="1.5"/><rect x="3" y="16" width="7" height="5" rx="1.5"/></svg>',
   building:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M4 21V5a2 2 0 0 1 2-2h6a2 2 0 0 1 2 2v16"/><path d="M14 9h4a2 2 0 0 1 2 2v10"/><path d="M4 21h16"/><path d="M8 7h2M8 11h2M8 15h2"/></svg>',
   layers:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M12 3 3 8l9 5 9-5-9-5Z"/><path d="m3 12 9 5 9-5"/><path d="m3 16 9 5 9-5"/></svg>',
@@ -462,6 +471,20 @@ const NAV = {
 };
 const ROLE_LABEL = {admin:'Administrador', gerente:'Gerente', colaborador:'Colaborador'};
 
+function avatarHtml(u,size){
+  const s=size||38; const style=`width:${s}px;height:${s}px;border-radius:${Math.round(s*0.29)}px;font-size:${Math.max(11,Math.round(s*0.36))}px`;
+  return (u&&u.foto)?`<div class="avatar" style="${style}"><img src="${u.foto}" alt=""/></div>`
+                    :`<div class="avatar" style="${style}">${initials(u?u.nome:'')}</div>`;
+}
+function sideFootHtml(){
+  return `<div class="user-row">
+    <button class="user-chip" onclick="modalPerfil()" title="Editar meu perfil">
+      ${avatarHtml(S.user,38)}
+      <div style="min-width:0"><div class="nm">${esc(S.user.nome)}</div><div class="rl">${ROLE_LABEL[S.user.perfil]}</div></div>
+    </button>
+    <button class="logout-btn" onclick="logout()" title="Sair" aria-label="Sair">${ICON.logout}</button>
+  </div>`;
+}
 function renderApp(){
   const nav = NAV[S.user.perfil] || [];
   el('app').innerHTML = `
@@ -471,13 +494,7 @@ function renderApp(){
       <div class="nav-label">Menu</div>
       <div id="navItems">${nav.map(n=>`
         <div class="nav-item" data-view="${n.id}" onclick="go('${n.id}')">${ICON[n.icon]}<span>${n.label}</span></div>`).join('')}</div>
-      <div class="side-foot">
-        <div class="user-chip">
-          <div class="avatar">${initials(S.user.nome)}</div>
-          <div><div class="nm">${esc(S.user.nome)}</div><div class="rl">${ROLE_LABEL[S.user.perfil]}</div></div>
-        </div>
-        <button class="btn btn-ghost btn-block btn-sm" style="margin-top:12px" onclick="logout()">${ICON.logout}<span>Sair</span></button>
-      </div>
+      <div class="side-foot" id="sideFoot">${sideFootHtml()}</div>
     </aside>
     <main class="main">
       <div class="topbar">
@@ -690,6 +707,75 @@ function modalResetSenha(id,nome){
   };
 }
 
+/* ---------------- MEU PERFIL (todos os usuários) ---------------- */
+function resizeImage(file,max){
+  return new Promise((resolve,reject)=>{
+    const img=new Image(); const url=URL.createObjectURL(file);
+    img.onload=()=>{ URL.revokeObjectURL(url);
+      let w=img.width,h=img.height; const scale=Math.min(1,(max||256)/Math.max(w,h)); w=Math.round(w*scale); h=Math.round(h*scale);
+      const cv=document.createElement('canvas'); cv.width=w; cv.height=h;
+      cv.getContext('2d').drawImage(img,0,0,w,h);
+      let q=0.82, out=cv.toDataURL('image/jpeg',q);
+      while(out.length>44000 && q>0.4){ q-=0.12; out=cv.toDataURL('image/jpeg',q); }
+      resolve(out);
+    };
+    img.onerror=()=>{ URL.revokeObjectURL(url); reject(new Error('Falha ao ler imagem')); };
+    img.src=url;
+  });
+}
+function modalPerfil(){
+  closeSidebarIfMobile();
+  const u=S.user;
+  modal({wide:true, title:'Meu perfil', body:`
+    <div style="display:flex;gap:22px;align-items:flex-start;flex-wrap:wrap">
+      <div style="text-align:center;flex:none">
+        <div id="perfilFotoPrev" class="avatar" style="width:104px;height:104px;border-radius:22px;font-size:2.2rem;margin:0 auto">${u.foto?`<img src="${u.foto}" alt=""/>`:initials(u.nome)}</div>
+        <label class="btn btn-ghost btn-sm" style="margin-top:12px;cursor:pointer">${ICON.camera}<span>Trocar foto</span>
+          <input id="perfilFoto" type="file" accept="image/*" style="display:none"/></label>
+        <button type="button" class="btn btn-ghost btn-sm" id="perfilRemoverFoto" style="margin-top:6px;${u.foto?'':'display:none'}">Remover foto</button>
+      </div>
+      <form id="fPerfil" style="flex:1;min-width:250px">
+        <div class="field"><label>Nome</label><input value="${esc(u.nome)}" disabled title="Fale com seu gestor para alterar o nome"/></div>
+        <div class="form-row">
+          <div class="field"><label>E-mail</label><input name="email" type="email" value="${esc(u.email||'')}" placeholder="voce@empresa.com"/></div>
+          <div class="field"><label>Telefone</label><input name="telefone" value="${esc(u.telefone||'')}" placeholder="(00) 00000-0000"/></div>
+        </div>
+        <fieldset style="margin-top:8px"><legend>Alterar senha <span class="page-sub" style="text-transform:none;letter-spacing:0">(opcional)</span></legend>
+          <div class="field"><label>Senha atual</label>${pwd('senhaAtual',false)}</div>
+          <div class="form-row">
+            <div class="field"><label>Nova senha</label>${pwd('novaSenha',false)}</div>
+            <div class="field"><label>Confirmar nova senha</label>${pwd('novaSenha2',false)}</div>
+          </div>
+          <div class="hint">Deixe em branco para manter a senha atual. Mínimo de 6 caracteres.</div>
+        </fieldset>
+      </form>
+    </div>`,
+    footer:`<button class="btn btn-ghost" onclick="closeModal()">Cancelar</button><button class="btn btn-primary" id="bPerfil">Salvar alterações</button>`});
+  let novaFoto; // undefined = inalterada | '' = remover | dataURL = nova
+  const prev=el('perfilFotoPrev'), rm=el('perfilRemoverFoto');
+  el('perfilFoto').onchange=async(e)=>{ const file=e.target.files[0]; if(!file) return;
+    try{ novaFoto=await resizeImage(file,256); prev.innerHTML=`<img src="${novaFoto}" alt=""/>`; if(rm) rm.style.display=''; }
+    catch(err){ toast('Não foi possível carregar a imagem.','err'); } };
+  if(rm) rm.onclick=()=>{ novaFoto=''; prev.innerHTML=initials(u.nome); rm.style.display='none'; };
+  el('bPerfil').onclick=async()=>{
+    const d=Object.fromEntries(new FormData(el('fPerfil')));
+    const payload={email:d.email,telefone:d.telefone};
+    if(d.senhaAtual||d.novaSenha||d.novaSenha2){
+      if((d.novaSenha||'').length<6) return toast('A nova senha deve ter ao menos 6 caracteres.','err');
+      if(d.novaSenha!==d.novaSenha2) return toast('A confirmação da nova senha não confere.','err');
+      if(!d.senhaAtual) return toast('Informe a senha atual para trocá-la.','err');
+      payload.senhaAtual=d.senhaAtual; payload.novaSenha=d.novaSenha;
+    }
+    if(novaFoto!==undefined) payload.foto=novaFoto;
+    const b=el('bPerfil'); b.disabled=true; b.textContent='Salvando…';
+    try{ const r=await api('atualizarMeuPerfil',payload); S.user=r.usuario||S.user;
+      const sf=el('sideFoot'); if(sf) sf.innerHTML=sideFootHtml();
+      toast('Perfil atualizado.','ok'); closeModal(); }
+    catch(e){ toast(e.message,'err'); b.disabled=false; b.textContent='Salvar alterações'; }
+  };
+}
+function closeSidebarIfMobile(){ if(window.innerWidth<=900) toggleSidebar(false); }
+
 /* ---------------- GERENTE · ÁREAS ---------------- */
 VIEWS.areas = async function(){
   setHead('Áreas','Subdivisões da sua gerência', `<button class="btn btn-primary" onclick="modalArea()">${ICON.plus}<span>Nova área</span></button>`);
@@ -767,7 +853,7 @@ VIEWS.colaboradores = async function(){
   el('content').innerHTML = `<div class="card"><table class="tbl">
     <thead><tr><th>Colaborador</th><th>Área</th><th>Cargo</th><th>Admissão</th><th></th></tr></thead>
     <tbody>${colaboradores.map(c=>`<tr>
-      <td><div style="display:flex;align-items:center;gap:11px"><div class="avatar" style="width:34px;height:34px;font-size:.8rem">${initials(c.nome)}</div><div><b>${esc(c.nome)}</b><br><span class="page-sub mono">@${esc(c.login)}</span></div></div></td>
+      <td><div style="display:flex;align-items:center;gap:11px">${avatarHtml(c,34)}<div><b>${esc(c.nome)}</b><br><span class="page-sub mono">@${esc(c.login)}</span></div></div></td>
       <td>${c.areaNome?`<span class="pill cyan">${esc(c.areaNome)}</span>`:'<span class="pill gray">sem área</span>'}</td>
       <td>${c.cargoNome?`<span class="pill gold">${esc(c.cargoNome)}</span>`:'<span class="pill gray">sem cargo</span>'}</td>
       <td class="page-sub">${fmtDay(c.dataAdmissao)}</td>
