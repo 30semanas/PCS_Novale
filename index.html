@@ -292,15 +292,20 @@ fieldset legend{font-size:.76rem;font-weight:700;color:var(--cyan-bright);paddin
 .org-tree ul ul::before{content:'';position:absolute;top:0;left:50%;height:20px;border-left:2px solid rgba(72,198,247,.30)}
 .org-tree>ul,.org-tree>ul>li{padding-top:0}
 .org-tree>ul>li::before,.org-tree>ul>li::after{display:none}
-.org-card{background:var(--card2,#182140);border:1px solid rgba(255,255,255,.08);border-radius:10px;padding:7px 9px;max-width:255px;box-shadow:0 3px 9px rgba(0,0,0,.2)}
-.org-card-h{display:flex;align-items:center;gap:6px;font-family:'Sora',system-ui,sans-serif;font-weight:600;font-size:.85rem;line-height:1.15}
-.org-resp{color:var(--muted,#8D99B8);font-size:.72rem;margin-top:2px;display:flex;align-items:center;gap:5px}
-.org-resp svg{width:12px;height:12px;flex:none}
-.org-meta{margin-top:5px;display:flex;gap:6px;flex-wrap:wrap;align-items:center}
-.org-actions{display:flex;gap:4px;flex-wrap:wrap;margin-top:7px}
-.org-actions .btn{padding:3px 5px}
-.org-actions .btn svg{width:14px;height:14px}
-.org-card .pill{font-size:.66rem;padding:1px 7px}
+.org-card{background:var(--card2,#182140);border:1px solid rgba(255,255,255,.09);border-radius:12px;padding:11px 13px;width:216px;box-shadow:0 5px 14px rgba(0,0,0,.24)}
+.org-card-h{display:flex;align-items:flex-start;justify-content:space-between;gap:8px;font-family:'Sora',system-ui,sans-serif;font-weight:600;font-size:.95rem;line-height:1.2}
+.org-name{display:flex;align-items:center;gap:6px;flex-wrap:wrap;min-width:0}
+.org-resp{color:var(--muted,#8D99B8);font-size:.8rem;margin-top:5px;display:flex;align-items:center;gap:6px}
+.org-resp svg{width:13px;height:13px;flex:none}
+.org-meta{margin-top:8px;display:flex;gap:7px;flex-wrap:wrap;align-items:center}
+.org-actions{display:flex;gap:5px;flex-wrap:wrap;margin-top:10px}
+.org-actions .btn{padding:4px 6px}
+.org-actions .btn svg{width:15px;height:15px}
+.org-card .pill{font-size:.7rem;padding:2px 8px}
+.org-toggle{flex:none;width:24px;height:24px;border-radius:50%;border:1px solid rgba(72,198,247,.5);background:rgba(72,198,247,.12);color:#48C6F7;display:flex;align-items:center;justify-content:center;cursor:pointer;padding:0}
+.org-toggle:hover{background:rgba(72,198,247,.22)}
+.org-toggle svg{width:13px;height:13px;transition:transform .15s}
+.org-toggle.closed svg{transform:rotate(-90deg)}
 </style>
 </head>
 <body>
@@ -378,6 +383,7 @@ const ICON = {
   logout:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="m16 17 5-5-5-5M21 12H9"/></svg>',
   plus:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>',
   move:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M5 9l-3 3 3 3M9 5l3-3 3 3M15 19l-3 3-3-3M19 9l3 3-3 3M2 12h20M12 2v20"/></svg>',
+  chevron:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6"><path d="M6 9l6 6 6-6"/></svg>',
   edit:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.12 2.12 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5Z"/></svg>',
   trash:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2m3 0v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/></svg>',
   key:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="7.5" cy="15.5" r="5.5"/><path d="m21 2-9.6 9.6M15.5 7.5l3 3L22 7l-3-3"/></svg>',
@@ -1072,28 +1078,41 @@ function renderFbList(fbs){
 
 /* ---------------- ORGANOGRAMA (todos) ---------------- */
 VIEWS.organograma = async function(){
-  const acao = (S.user.perfil==='admin') ? `<button class="btn btn-primary" onclick="modalNovaArea('','')">${ICON.plus}<span>Nova área / Empresa</span></button>` : '';
-  setHead('Organograma','Estrutura da empresa: cada área tem um responsável e responde à área acima', acao);
   const areas = await api('listarAreas').then(r=>r.areas);
   S.cache.areas = areas;
   const roots = areas.filter(a=>!a.paiId);
+  const temSubs = areas.some(a=>areas.some(x=>x.paiId===a.id));
+  const acaoAdmin = (S.user.perfil==='admin') ? `<button class="btn btn-primary" onclick="modalNovaArea('','')">${ICON.plus}<span>Nova área / Empresa</span></button>` : '';
+  const acoes = (roots.length&&temSubs?`<button class="btn btn-ghost" onclick="expandAllOrg()">Expandir tudo</button><button class="btn btn-ghost" onclick="collapseAllOrg()">Recolher tudo</button>`:'') + acaoAdmin;
+  setHead('Organograma','Estrutura da empresa: use os botões ⌄ para abrir ou agrupar cada ramo', acoes);
   if(!roots.length){
     if(S.user.perfil==='admin') return el('content').innerHTML = emptyState('Monte sua empresa','Crie a Empresa (o topo do organograma) e o responsável por ela.','Criar Empresa',"modalNovaArea('','')");
     return el('content').innerHTML = emptyState('Organograma em construção','A estrutura ainda não foi criada pelo administrador.','','');
   }
-  el('content').innerHTML = `<div class="org-tree"><ul>${roots.map(r=>orgNode(r,areas)).join('')}</ul></div>`;
+  if(!S.cache.orgCollapsed){ // padrão: raiz aberta, ramos abaixo agrupados
+    S.cache.orgCollapsed = new Set(areas.filter(a=>a.paiId && areas.some(x=>x.paiId===a.id)).map(a=>a.id));
+  }
+  renderOrg();
 };
+function renderOrg(){
+  const areas=S.cache.areas||[]; const roots=areas.filter(a=>!a.paiId);
+  el('content').innerHTML = `<div class="org-tree"><ul>${roots.map(r=>orgNode(r,areas)).join('')}</ul></div>`;
+}
+function toggleOrg(id){ const s=S.cache.orgCollapsed||(S.cache.orgCollapsed=new Set()); if(s.has(id)) s.delete(id); else s.add(id); renderOrg(); }
+function expandAllOrg(){ S.cache.orgCollapsed=new Set(); renderOrg(); }
+function collapseAllOrg(){ const areas=S.cache.areas||[]; S.cache.orgCollapsed=new Set(areas.filter(a=>areas.some(x=>x.paiId===a.id)).map(a=>a.id)); renderOrg(); }
 function orgPodeGerir(a){ return S.user.perfil==='admin' || String(a.responsavelId)===String(S.user.id); }
 function orgNode(a, areas){
   const filhos = areas.filter(x=>x.paiId===a.id);
   const gerir = orgPodeGerir(a);
   const transf = orgCanTransfer(a);
+  const collapsed = !!(S.cache.orgCollapsed && S.cache.orgCollapsed.has(a.id));
   const aj = JSON.stringify(a).replace(/'/g,"&#39;");
   return `<li>
     <div class="org-card">
-      <div class="org-card-h">${esc(a.nome)} ${a.paiId?'':'<span class="pill gold">Empresa</span>'}</div>
+      <div class="org-card-h"><span class="org-name">${esc(a.nome)} ${a.paiId?'':'<span class="pill gold">Empresa</span>'}</span>${filhos.length?`<button class="org-toggle ${collapsed?'closed':''}" title="${collapsed?('Abrir '+filhos.length+' área(s) abaixo'):'Agrupar'}" onclick="toggleOrg('${a.id}')">${ICON.chevron}</button>`:''}</div>
       <div class="org-resp">${ICON.users} ${a.responsavelNome?esc(a.responsavelNome):'<span style="color:var(--red)">sem responsável</span>'}</div>
-      <div class="org-meta"><span class="pill cyan"><span class="dot"></span>${a.qtdMembros}</span>${a.descricao?`<span class="page-sub" style="font-size:.7rem">${esc(a.descricao)}</span>`:''}</div>
+      <div class="org-meta"><span class="pill cyan"><span class="dot"></span>${a.qtdMembros}</span>${(collapsed&&filhos.length)?`<span class="pill gold">+${filhos.length} área(s)</span>`:''}${a.descricao?`<span class="page-sub" style="font-size:.72rem">${esc(a.descricao)}</span>`:''}</div>
       ${(gerir||transf)?`<div class="org-actions">
         ${gerir?`<button class="btn btn-ghost btn-sm btn-icon" title="Nova subárea" onclick='modalNovaArea("${a.id}","${esc(a.nome)}")'>${ICON.plus}</button>
         <button class="btn btn-ghost btn-sm btn-icon" title="Adicionar pessoa" onclick='modalAddPessoa("${a.id}","${esc(a.nome)}")'>${ICON.users}</button>
@@ -1103,7 +1122,7 @@ function orgNode(a, areas){
         ${gerir&&a.paiId?`<button class="btn btn-danger btn-sm btn-icon" title="Excluir" onclick="excluirArea('${a.id}','${esc(a.nome)}')">${ICON.trash}</button>`:''}
       </div>`:''}
     </div>
-    ${filhos.length?`<ul>${filhos.map(c=>orgNode(c,areas)).join('')}</ul>`:''}
+    ${(filhos.length && !collapsed)?`<ul>${filhos.map(c=>orgNode(c,areas)).join('')}</ul>`:''}
   </li>`;
 }
 function orgCanTransfer(a){
