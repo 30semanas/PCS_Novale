@@ -277,6 +277,16 @@ fieldset legend{font-size:.76rem;font-weight:700;color:var(--cyan-bright);paddin
 .menu-toggle{display:none;width:42px;height:42px;border-radius:11px;background:var(--surface);border:1px solid var(--border);place-items:center;color:var(--text)}
 .scrim{position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:65;display:none}
 .scrim.on{display:block}
+
+/* organograma */
+.org-tree{padding:6px 2px 24px}
+.org-node{margin:8px 0}
+.org-children{margin-left:22px;padding-left:20px;border-left:2px solid rgba(72,198,247,.22)}
+.org-card{background:var(--card2,#182140);border:1px solid rgba(255,255,255,.08);border-radius:14px;padding:12px 14px;max-width:520px;box-shadow:0 4px 14px rgba(0,0,0,.22)}
+.org-card-h{display:flex;align-items:center;gap:8px;font-family:'Sora',system-ui,sans-serif;font-weight:600;font-size:1.02rem}
+.org-resp{color:var(--muted,#8D99B8);font-size:.86rem;margin-top:3px;display:flex;align-items:center;gap:6px}
+.org-meta{margin-top:8px;display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.org-actions{display:flex;gap:6px;flex-wrap:wrap;margin-top:10px}
 </style>
 </head>
 <body>
@@ -460,27 +470,28 @@ async function logout(){
 /* ================================================================
  *  APP SHELL + NAV
  * ================================================================ */
-const NAV = {
-  admin:[
+function buildNav(){
+  const u=S.user;
+  if(u.perfil==='admin') return [
     {id:'dashboard', label:'Painel', icon:'dash'},
-    {id:'gerencias', label:'Gerências', icon:'building'},
-    {id:'usuarios', label:'Usuários', icon:'users'}
-  ],
-  gerente:[
-    {id:'dashboard', label:'Painel', icon:'dash'},
-    {id:'areas', label:'Áreas', icon:'layers'},
+    {id:'organograma', label:'Organograma', icon:'building'},
     {id:'cargos', label:'Cargos & Salários', icon:'badge'},
-    {id:'colaboradores', label:'Colaboradores', icon:'users'},
+    {id:'usuarios', label:'Usuários', icon:'users'}
+  ];
+  const cap=u.capacidades||{}; const nav=[{id:'dashboard', label:'Meu painel', icon:'dash'},{id:'organograma', label:'Organograma', icon:'building'}];
+  if(cap.gerencia) nav.push(
+    {id:'colaboradores', label:'Minha equipe', icon:'users'},
+    {id:'cargos', label:'Cargos & Salários', icon:'badge'},
     {id:'avaliacoes', label:'Avaliações', icon:'chart'}
-  ],
-  colaborador:[
-    {id:'dashboard', label:'Meu painel', icon:'dash'},
+  );
+  if(cap.avaliado) nav.push(
     {id:'minhas-avaliacoes', label:'Minhas avaliações', icon:'chart'},
     {id:'meu-cargo', label:'Meu cargo', icon:'badge'},
     {id:'meus-feedbacks', label:'Feedbacks', icon:'message'}
-  ]
-};
-const ROLE_LABEL = {admin:'Administrador', gerente:'Gerente', colaborador:'Colaborador'};
+  );
+  return nav;
+}
+const ROLE_LABEL = {admin:'Administrador', gerente:'Gerente', colaborador:'Colaborador', usuario:'Usuário'};
 
 function avatarHtml(u,size){
   const s=size||38; const style=`width:${s}px;height:${s}px;border-radius:${Math.round(s*0.29)}px;font-size:${Math.max(11,Math.round(s*0.36))}px`;
@@ -491,7 +502,7 @@ function sideFootHtml(){
   return `<div class="user-row">
     <button class="user-chip" onclick="modalPerfil()" title="Editar meu perfil">
       ${avatarHtml(S.user,38)}
-      <div style="min-width:0"><div class="nm">${esc(S.user.nome)}</div><div class="rl">${ROLE_LABEL[S.user.perfil]}</div></div>
+      <div style="min-width:0"><div class="nm">${esc(S.user.nome)}</div><div class="rl">${esc(S.user.papel||ROLE_LABEL[S.user.perfil]||"")}</div></div>
     </button>
     <button class="logout-btn" onclick="logout()" title="Sair" aria-label="Sair">${ICON.logout}</button>
   </div>`;
@@ -507,7 +518,7 @@ function pintarBadges(){
   });
 }
 function renderApp(){
-  const nav = NAV[S.user.perfil] || [];
+  const nav = buildNav();
   el('app').innerHTML = `
   <div class="shell">
     <aside class="sidebar" id="sidebar">
@@ -589,57 +600,46 @@ VIEWS.dashboard = async function(){
   if(r.perfil==='admin'){
     setHead('Painel do administrador','Visão geral da estrutura organizacional');
     el('content').innerHTML = `<div class="grid cols-4">
-      ${stat(r.totalGerencias,'Gerências','building')}
-      ${stat(r.totalGerentes,'Gerentes','badge','cyan')}
-      ${stat(r.totalColaboradores,'Colaboradores','users','green')}
+      ${stat(r.totalAreas,'Áreas','building')}
+      ${stat(r.totalLideres,'Responsáveis','badge','cyan')}
+      ${stat(r.totalUsuarios,'Pessoas','users','green')}
       ${stat(r.totalAvaliacoes,'Avaliações','chart','gold')}
     </div>
     <div class="section-gap card">
       <div class="card-h"><h3>Como funciona</h3></div>
       ${flow([
-        ['Crie uma gerência','Defina o nome e cadastre o gerente responsável com login e senha próprios.'],
-        ['O gerente monta a estrutura','Ele cria as áreas, os cargos (com salário e % de avanço) e os colaboradores.'],
-        ['Avaliação em conjunto','Colaborador e gestor avaliam competências, chegam a um consenso e definem metas.']
+        ['Monte o organograma','Crie a Empresa (topo) e vá abrindo áreas abaixo. Cada área tem um responsável e responde à área acima.'],
+        ['Adicione as pessoas','Quem entra numa área responde ao responsável dela; o responsável responde ao responsável da área-pai — e assim por diante.'],
+        ['Avaliação segue a árvore','Cada responsável avalia quem está abaixo e é avaliado por quem está acima. O de cima abre o ciclo, o de baixo faz a autoavaliação.']
       ])}
     </div>`;
-  } else if(r.perfil==='gerente'){
-    setHead('Painel da gerência','Sua equipe, cargos e ciclos de avaliação');
-    el('content').innerHTML = `<div class="grid cols-4">
-      ${stat(r.totalColaboradores,'Colaboradores','users')}
-      ${stat(r.totalAreas,'Áreas','layers','cyan')}
+    return;
+  }
+  setHead('Meu painel', r.gerencia?'Sua equipe, cargos e ciclos de avaliação':'Acompanhe seu desenvolvimento');
+  let html='';
+  if(r.gerencia){
+    html += `<div class="grid cols-4">
+      ${stat(r.totalColaboradores,'Minha equipe','users')}
+      ${stat(r.totalAreas,'Áreas que lidero','building','cyan')}
       ${stat(r.totalCargos,'Cargos','badge','gold')}
       ${stat(r.avaliacoesAbertas,'Avaliações abertas','chart','green')}
     </div>
-    <div class="grid cols-2 section-gap">
-      <div class="card"><div class="card-h"><h3>Ações rápidas</h3></div>
-        <div class="grid" style="gap:10px">
-          <button class="btn btn-ghost btn-block" onclick="go('colaboradores')">${ICON.users}<span>Gerenciar colaboradores</span></button>
-          <button class="btn btn-ghost btn-block" onclick="go('cargos')">${ICON.badge}<span>Cargos & salários</span></button>
-          <button class="btn btn-ghost btn-block" onclick="go('avaliacoes')">${ICON.chart}<span>Ciclos de avaliação</span></button>
-        </div>
-      </div>
-      <div class="card"><div class="card-h"><h3>Progresso das avaliações</h3></div>
-        <div class="stat"><div class="k">${r.avaliacoesConcluidas}</div><div class="lbl">concluídas</div></div>
-        <div class="progress"><span style="width:${r.avaliacoesConcluidas+r.avaliacoesAbertas?Math.round(100*r.avaliacoesConcluidas/(r.avaliacoesConcluidas+r.avaliacoesAbertas)):0}%"></span></div>
-        <p class="page-sub" style="margin-top:12px">${r.avaliacoesAbertas} avaliação(ões) em andamento.</p>
-      </div>
-    </div>`;
-  } else {
-    setHead('Meu painel','Acompanhe seu desenvolvimento');
-    el('content').innerHTML = `<div class="grid cols-3">
-      ${stat(r.avaliacoesPendentes,'Autoavaliações pendentes','chart','gold')}
-      ${stat(r.avaliacoesConcluidas,'Avaliações concluídas','check','green')}
-      ${stat(r.totalAvaliacoes,'Total de ciclos','clip','cyan')}
-    </div>
-    ${r.avaliacoesPendentes>0?`<div class="section-gap inline-note">${ICON.alert}<span>Você tem autoavaliações aguardando seu preenchimento. Acesse <b>Minhas avaliações</b>.</span></div>`:''}
-    <div class="section-gap card"><div class="card-h"><h3>Como é a avaliação</h3></div>
-      ${flow([
-        ['Autoavaliação','Você avalia suas competências numa escala de 1 a 5 e registra pontos fortes e de melhoria.'],
-        ['Avaliação do gestor','Seu gestor avalia as mesmas competências de forma independente.'],
-        ['Consenso e metas','Juntos vocês alinham as notas e definem metas e feedback para evolução.']
-      ])}
-    </div>`;
+    <div class="card section-gap"><div class="card-h"><h3>Ações rápidas</h3></div>
+      <div class="grid" style="gap:10px">
+        <button class="btn btn-ghost btn-block" onclick="go('organograma')">${ICON.building}<span>Ver organograma</span></button>
+        <button class="btn btn-ghost btn-block" onclick="go('colaboradores')">${ICON.users}<span>Minha equipe</span></button>
+        <button class="btn btn-ghost btn-block" onclick="go('avaliacoes')">${ICON.chart}<span>Ciclos de avaliação</span></button>
+      </div></div>`;
   }
+  if(r.avaliado){
+    html += `<div class="grid cols-3 section-gap">
+      ${stat(r.avaliacoesPendentes||0,'Autoavaliações pendentes','chart','gold')}
+      ${stat(r.minhasConcluidas||0,'Minhas concluídas','check','green')}
+      ${stat(r.totalMinhas||0,'Meus ciclos','clip','cyan')}
+    </div>
+    ${(r.avaliacoesPendentes||0)>0?`<div class="section-gap inline-note">${ICON.alert}<span>Você tem autoavaliações aguardando seu preenchimento. Acesse <b>Minhas avaliações</b>.</span></div>`:''}`;
+  }
+  el('content').innerHTML = html || `<div class="empty">${ICON.dash}<p>Sem informações para exibir ainda.</p></div>`;
 };
 function stat(k,lbl,icon,cls=''){ return `<div class="card stat ${cls}"><div class="ic">${ICON[icon]||''}</div><div class="k">${k}</div><div class="lbl">${lbl}</div></div>`; }
 function flow(items){ return `<div class="steps">${items.map((it,i)=>`<div class="step"><div class="sn">PASSO ${i+1}</div><div class="st">${esc(it[0])}</div><div class="page-sub" style="margin-top:4px">${esc(it[1])}</div></div>`).join('')}</div>`; }
@@ -710,11 +710,11 @@ VIEWS.usuarios = async function(){
   setHead('Usuários','Todas as contas cadastradas no sistema');
   const {usuarios} = await api('listarUsuarios');
   el('content').innerHTML = `<div class="card"><table class="tbl">
-    <thead><tr><th>Nome</th><th>Login</th><th>Perfil</th><th>Status</th><th></th></tr></thead>
+    <thead><tr><th>Nome</th><th>Login</th><th>Papel / Área</th><th>Status</th><th></th></tr></thead>
     <tbody>${usuarios.map(u=>`<tr>
       <td><b>${esc(u.nome)}</b><br><span class="page-sub">${esc(u.email||'')}</span></td>
       <td class="mono">${esc(u.login)}</td>
-      <td><span class="pill ${u.perfil==='admin'?'gold':u.perfil==='gerente'?'cyan':'gray'}">${ROLE_LABEL[u.perfil]}</span></td>
+      <td><span class="pill ${u.perfil==='admin'?'gold':'cyan'}">${esc(u.papel||ROLE_LABEL[u.perfil]||"Usuário")}</span></td>
       <td>${String(u.ativo)!=='false'?'<span class="pill green"><span class="dot"></span>Ativo</span>':'<span class="pill red"><span class="dot"></span>Inativo</span>'}</td>
       <td class="row-actions">${u.perfil!=='admin'?`<button class="btn btn-ghost btn-sm" onclick="modalResetSenha('${u.id}','${esc(u.nome)}')">${ICON.key}</button>`:''}</td>
     </tr>`).join('')}</tbody></table></div>`;
@@ -871,10 +871,11 @@ async function excluirCargo(id,nome){ confirmar(`Remover o cargo "${nome}"?`, as
 
 /* ---------------- GERENTE · COLABORADORES ---------------- */
 VIEWS.colaboradores = async function(){
-  setHead('Colaboradores','Cadastre, atribua área e cargo à sua equipe', `<button class="btn btn-primary" onclick="modalColaborador()">${ICON.plus}<span>Novo colaborador</span></button>`);
+  setHead('Minha equipe','Pessoas que respondem a você (diretamente ou pelas áreas que lidera)', `<button class="btn btn-primary" onclick="modalColaborador()">${ICON.plus}<span>Nova pessoa</span></button>`);
   const [{colaboradores}, areas, {cargos}] = await Promise.all([ api('listarColaboradores'), api('listarAreas').then(r=>r.areas), api('listarCargos') ]);
   S.cache.areas=areas; S.cache.cargos=cargos;
-  if(!colaboradores.length) return el('content').innerHTML = emptyState('Nenhum colaborador','Cadastre os colaboradores da sua equipe para depois atribuir áreas, cargos e avaliações.','Novo colaborador','modalColaborador()');
+  S.cache.areasLidero = areas.filter(a=>String(a.responsavelId||'')===String(S.user.id));
+  if(!colaboradores.length) return el('content').innerHTML = emptyState('Sua equipe está vazia','Adicione pessoas às áreas que você lidera para acompanhar cargos, feedbacks e avaliações.','Nova pessoa','modalColaborador()');
   el('content').innerHTML = `<div class="card"><table class="tbl">
     <thead><tr><th>Colaborador</th><th>Área</th><th>Cargo</th><th>Admissão</th><th></th></tr></thead>
     <tbody>${colaboradores.map(c=>`<tr>
@@ -937,25 +938,28 @@ async function abrirColaborador(id){
   }catch(e){ toast(e.message,'err'); go('colaboradores'); }
 }
 function modalColaborador(){
-  const areas=S.cache.areas||[], cargos=S.cache.cargos||[];
-  modal({title:'Novo colaborador', body:`<form id="fCo">
+  const cargos=S.cache.cargos||[], areasLidero=S.cache.areasLidero||[];
+  if(!areasLidero.length){
+    return modal({title:'Nenhuma área sob sua liderança', body:`<div class="inline-note">${ICON.info}<span>Para adicionar pessoas, você precisa ser responsável por uma área. Crie uma subárea no <b>Organograma</b> ou peça ao administrador.</span></div>`, footer:`<button class="btn btn-primary" onclick="closeModal()">Entendi</button>`});
+  }
+  modal({title:'Nova pessoa', body:`<form id="fCo">
     <div class="field"><label>Nome completo</label><input name="nome" required/></div>
     <div class="form-row">
+      <div class="field"><label>Área</label><select name="areaId" required>${areasLidero.map(a=>`<option value="${a.id}">${esc(a.nome)}</option>`).join('')}</select></div>
+      <div class="field"><label>Cargo</label><select name="cargoId"><option value="">— sem cargo —</option>${cargos.map(c=>`<option value="${c.id}">${esc(c.nome)}</option>`).join('')}</select></div>
+    </div>
+    <div class="form-row">
       <div class="field"><label>E-mail</label><input name="email" type="email"/></div>
-      <div class="field"><label>Matrícula</label><input name="matricula"/></div>
+      <div class="field"><label>Telefone</label><input name="telefone"/></div>
     </div>
     <div class="form-row">
       <div class="field"><label>Login</label><input name="login" required/></div>
-      <div class="field"><label>Data de admissão</label><input name="dataAdmissao" type="date"/></div>
+      <div class="field"><label>Matrícula</label><input name="matricula"/></div>
     </div>
     <div class="field"><label>Senha de acesso</label>${pwd('senha')}</div>
-    <div class="form-row">
-      <div class="field"><label>Área</label><select name="areaId"><option value="">— sem área —</option>${areas.map(a=>`<option value="${a.id}">${esc(a.nome)}</option>`).join('')}</select></div>
-      <div class="field"><label>Cargo</label><select name="cargoId"><option value="">— sem cargo —</option>${cargos.map(c=>`<option value="${c.id}">${esc(c.nome)}</option>`).join('')}</select></div>
-    </div>
   </form>`, footer:`<button class="btn btn-ghost" onclick="closeModal()">Cancelar</button><button class="btn btn-primary" id="bCo">Cadastrar</button>`});
   el('bCo').onclick=async()=>{ const f=el('fCo'); if(!f.reportValidity())return; const d=Object.fromEntries(new FormData(f)); const b=el('bCo');b.disabled=true;b.textContent='Cadastrando…';
-    try{ await api('criarColaborador',d); toast('Colaborador cadastrado.','ok'); closeModal(); go('colaboradores'); }catch(e){ toast(e.message,'err'); b.disabled=false; b.textContent='Cadastrar'; } };
+    try{ await api('criarUsuario',d); toast('Pessoa cadastrada.','ok'); closeModal(); go('colaboradores'); }catch(e){ toast(e.message,'err'); b.disabled=false; b.textContent='Cadastrar'; } };
 }
 function modalAtribuir(c){
   const areas=S.cache.areas||[], cargos=S.cache.cargos||[];
@@ -992,6 +996,85 @@ function renderFbList(fbs){
   return fbs.map(f=>`<div class="item-card" style="flex-direction:column;align-items:stretch;gap:8px">
     <div style="display:flex;justify-content:space-between;gap:10px"><span class="pill cyan">${esc(f.tipo)}</span><span class="page-sub">${fmtDate(f.data)} · ${esc(f.autorNome)}</span></div>
     <div class="v" style="white-space:pre-wrap">${esc(f.texto)}</div></div>`).join('');
+}
+
+/* ---------------- ORGANOGRAMA (todos) ---------------- */
+VIEWS.organograma = async function(){
+  const acao = (S.user.perfil==='admin') ? `<button class="btn btn-primary" onclick="modalNovaArea('','')">${ICON.plus}<span>Nova área / Empresa</span></button>` : '';
+  setHead('Organograma','Estrutura da empresa: cada área tem um responsável e responde à área acima', acao);
+  const areas = await api('listarAreas').then(r=>r.areas);
+  S.cache.areas = areas;
+  const roots = areas.filter(a=>!a.paiId);
+  if(!roots.length){
+    if(S.user.perfil==='admin') return el('content').innerHTML = emptyState('Monte sua empresa','Crie a Empresa (o topo do organograma) e o responsável por ela.','Criar Empresa',"modalNovaArea('','')");
+    return el('content').innerHTML = emptyState('Organograma em construção','A estrutura ainda não foi criada pelo administrador.','','');
+  }
+  el('content').innerHTML = `<div class="org-tree">${roots.map(r=>orgNode(r,areas)).join('')}</div>`;
+};
+function orgPodeGerir(a){ return S.user.perfil==='admin' || String(a.responsavelId)===String(S.user.id); }
+function orgNode(a, areas){
+  const filhos = areas.filter(x=>x.paiId===a.id);
+  const gerir = orgPodeGerir(a);
+  const aj = JSON.stringify(a).replace(/'/g,"&#39;");
+  return `<div class="org-node">
+    <div class="org-card">
+      <div class="org-card-h">${esc(a.nome)} ${a.paiId?'':'<span class="pill gold" style="margin-left:6px">Empresa</span>'}</div>
+      <div class="org-resp">${ICON.users} ${a.responsavelNome?esc(a.responsavelNome):'<span style="color:var(--red)">sem responsável</span>'}</div>
+      <div class="org-meta"><span class="pill cyan"><span class="dot"></span>${a.qtdMembros} pessoa(s)</span>${a.descricao?`<span class="page-sub">${esc(a.descricao)}</span>`:''}</div>
+      ${gerir?`<div class="org-actions">
+        <button class="btn btn-ghost btn-sm" onclick='modalNovaArea("${a.id}","${esc(a.nome)}")'>${ICON.plus}<span>Subárea</span></button>
+        <button class="btn btn-ghost btn-sm" onclick='modalAddPessoa("${a.id}","${esc(a.nome)}")'>${ICON.users}<span>Pessoa</span></button>
+        <button class="btn btn-ghost btn-sm" onclick='verMembros("${a.id}","${esc(a.nome)}")'>Ver pessoas</button>
+        <button class="btn btn-ghost btn-sm btn-icon" title="Renomear" onclick='modalEditarArea(${aj})'>${ICON.edit}</button>
+        ${a.paiId?`<button class="btn btn-danger btn-sm btn-icon" title="Excluir" onclick="excluirArea('${a.id}','${esc(a.nome)}')">${ICON.trash}</button>`:''}
+      </div>`:''}
+    </div>
+    ${filhos.length?`<div class="org-children">${filhos.map(c=>orgNode(c,areas)).join('')}</div>`:''}
+  </div>`;
+}
+function modalNovaArea(paiId,paiNome){
+  const raiz = !paiId;
+  modal({title: raiz?'Criar Empresa (topo)':`Nova subárea de ${paiNome}`, body:`<form id="fNA">
+    <div class="field"><label>${raiz?'Nome da empresa/área raiz':'Nome da área'}</label><input name="nome" required/></div>
+    <div class="field"><label>Descrição (opcional)</label><input name="descricao"/></div>
+    <fieldset style="margin-top:12px"><legend>Responsável desta área</legend>
+      <div class="field"><label>Nome</label><input name="rNome" required/></div>
+      <div class="form-row"><div class="field"><label>E-mail</label><input name="rEmail" type="email"/></div><div class="field"><label>Telefone</label><input name="rTelefone"/></div></div>
+      <div class="form-row"><div class="field"><label>Login</label><input name="rLogin" required/></div><div class="field"><label>Senha</label>${pwd('rSenha')}</div></div>
+      <div class="hint">${raiz?'Este será o topo do organograma (ex.: Diretor(a)).':'O responsável responde ao responsável de '+esc(paiNome)+'.'}</div>
+    </fieldset>
+  </form>`, footer:`<button class="btn btn-ghost" onclick="closeModal()">Cancelar</button><button class="btn btn-primary" id="bNA">Criar</button>`});
+  el('bNA').onclick=async()=>{ const f=el('fNA'); if(!f.reportValidity())return; const d=Object.fromEntries(new FormData(f)); const b=el('bNA');b.disabled=true;
+    try{ await api('criarArea',{nome:d.nome,descricao:d.descricao,paiId:paiId,responsavel:{nome:d.rNome,email:d.rEmail,telefone:d.rTelefone,login:d.rLogin,senha:d.rSenha}}); toast('Área criada.','ok'); closeModal(); go('organograma'); }
+    catch(e){ toast(e.message,'err'); b.disabled=false; } };
+}
+function modalEditarArea(a){
+  modal({title:`Editar ${a.nome}`, body:`<form id="fEA">
+    <div class="field"><label>Nome</label><input name="nome" required value="${esc(a.nome)}"/></div>
+    <div class="field"><label>Descrição</label><input name="descricao" value="${esc(a.descricao||'')}"/></div>
+  </form>`, footer:`<button class="btn btn-ghost" onclick="closeModal()">Cancelar</button><button class="btn btn-primary" id="bEA">Salvar</button>`});
+  el('bEA').onclick=async()=>{ const d=Object.fromEntries(new FormData(el('fEA'))); const b=el('bEA');b.disabled=true;
+    try{ await api('atualizarArea',{id:a.id,nome:d.nome,descricao:d.descricao}); toast('Área atualizada.','ok'); closeModal(); go('organograma'); }catch(e){ toast(e.message,'err'); b.disabled=false; } };
+}
+async function modalAddPessoa(areaId,areaNome){
+  const {cargos}=await api('listarCargos');
+  modal({title:`Nova pessoa · ${areaNome}`, body:`<form id="fAP">
+    <div class="field"><label>Nome completo</label><input name="nome" required/></div>
+    <div class="form-row"><div class="field"><label>E-mail</label><input name="email" type="email"/></div><div class="field"><label>Telefone</label><input name="telefone"/></div></div>
+    <div class="form-row"><div class="field"><label>Login</label><input name="login" required/></div><div class="field"><label>Senha</label>${pwd('senha')}</div></div>
+    <div class="field"><label>Cargo</label><select name="cargoId"><option value="">— sem cargo —</option>${cargos.map(c=>`<option value="${c.id}">${esc(c.nome)}</option>`).join('')}</select></div>
+  </form>`, footer:`<button class="btn btn-ghost" onclick="closeModal()">Cancelar</button><button class="btn btn-primary" id="bAP">Cadastrar</button>`});
+  el('bAP').onclick=async()=>{ const f=el('fAP'); if(!f.reportValidity())return; const d=Object.fromEntries(new FormData(f)); const b=el('bAP');b.disabled=true;
+    try{ await api('criarUsuario',Object.assign({areaId:areaId},d)); toast('Pessoa cadastrada.','ok'); closeModal(); go('organograma'); }catch(e){ toast(e.message,'err'); b.disabled=false; } };
+}
+async function verMembros(areaId,areaNome){
+  const {colaboradores}=await api('listarColaboradores');
+  const membros=(colaboradores||[]).filter(c=>c.areaId===areaId);
+  modal({wide:true,title:`Pessoas · ${areaNome}`, body: membros.length?`<table class="tbl"><tbody>${membros.map(c=>`<tr>
+    <td><div style="display:flex;align-items:center;gap:10px">${avatarHtml(c,32)}<div><b>${esc(c.nome)}</b><br><span class="page-sub mono">@${esc(c.login)}</span></div></div></td>
+    <td>${c.cargoNome?`<span class="pill gold">${esc(c.cargoNome)}</span>`:'<span class="pill gray">sem cargo</span>'}</td>
+    <td class="row-actions"><button class="btn btn-ghost btn-sm" onclick="closeModal();abrirColaborador('${c.id}')">Ficha</button></td>
+  </tr>`).join('')}</tbody></table>`:`<div class="empty">${ICON.users}<p>Nenhuma pessoa nesta área ainda.</p></div>`});
 }
 
 /* ---------------- AVALIAÇÕES (gerente) ---------------- */
