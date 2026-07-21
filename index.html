@@ -279,9 +279,19 @@ fieldset legend{font-size:.76rem;font-weight:700;color:var(--cyan-bright);paddin
 .scrim.on{display:block}
 
 /* organograma */
-.org-tree{padding:4px 2px 20px}
-.org-node{margin:5px 0}
-.org-children{margin-left:15px;padding-left:13px;border-left:2px solid rgba(72,198,247,.22)}
+.org-tree{overflow-x:auto;padding:6px 2px 28px}
+.org-tree ul{display:flex;justify-content:center;padding-top:20px;position:relative;margin:0;list-style:none}
+.org-tree li{position:relative;padding:20px 9px 0;display:flex;flex-direction:column;align-items:center}
+.org-tree li::before,.org-tree li::after{content:'';position:absolute;top:0;right:50%;width:50%;height:20px;border-top:2px solid rgba(72,198,247,.30)}
+.org-tree li::after{right:auto;left:50%;border-left:2px solid rgba(72,198,247,.30)}
+.org-tree li::before{border-right:2px solid rgba(72,198,247,.30)}
+.org-tree li:only-child::before,.org-tree li:only-child::after{display:none}
+.org-tree li:first-child::before,.org-tree li:last-child::after{border:0}
+.org-tree li:last-child::before{border-right:2px solid rgba(72,198,247,.30)}
+.org-tree li:first-child::after{border-left:2px solid rgba(72,198,247,.30)}
+.org-tree ul ul::before{content:'';position:absolute;top:0;left:50%;height:20px;border-left:2px solid rgba(72,198,247,.30)}
+.org-tree>ul,.org-tree>ul>li{padding-top:0}
+.org-tree>ul>li::before,.org-tree>ul>li::after{display:none}
 .org-card{background:var(--card2,#182140);border:1px solid rgba(255,255,255,.08);border-radius:10px;padding:7px 9px;max-width:255px;box-shadow:0 3px 9px rgba(0,0,0,.2)}
 .org-card-h{display:flex;align-items:center;gap:6px;font-family:'Sora',system-ui,sans-serif;font-weight:600;font-size:.85rem;line-height:1.15}
 .org-resp{color:var(--muted,#8D99B8);font-size:.72rem;margin-top:2px;display:flex;align-items:center;gap:5px}
@@ -919,25 +929,38 @@ async function excluirCargo(id,nome){ confirmar(`Remover o cargo "${nome}"?`, as
 
 /* ---------------- GERENTE · COLABORADORES ---------------- */
 VIEWS.colaboradores = async function(){
-  setHead('Minha equipe','Pessoas que respondem a você (diretamente ou pelas áreas que lidera)', `<button class="btn btn-primary" onclick="modalColaborador()">${ICON.plus}<span>Nova pessoa</span></button>`);
+  setHead('Minha equipe','Pessoas que respondem a você (diretamente ou pelas áreas que lidera)', `<button class="btn btn-ghost" onclick="modalAtribuirDisponivel()">${ICON.users}<span>Adicionar disponível</span></button><button class="btn btn-primary" onclick="modalColaborador()">${ICON.plus}<span>Nova pessoa</span></button>`);
   const [{colaboradores}, areas, {cargos}] = await Promise.all([ api('listarColaboradores'), api('listarAreas').then(r=>r.areas), api('listarCargos') ]);
   S.cache.areas=areas; S.cache.cargos=cargos;
   S.cache.areasLidero = areas.filter(a=>String(a.responsavelId||'')===String(S.user.id));
-  if(!colaboradores.length) return el('content').innerHTML = emptyState('Sua equipe está vazia','Adicione pessoas às áreas que você lidera para acompanhar cargos, feedbacks e avaliações.','Nova pessoa','modalColaborador()');
+  const idsLidero = new Set(S.cache.areasLidero.map(a=>a.id));
+  if(!colaboradores.length) return el('content').innerHTML = emptyState('Sua equipe está vazia','Adicione pessoas disponíveis ou crie novas nas áreas que você lidera.','Adicionar disponível','modalAtribuirDisponivel()');
   el('content').innerHTML = `<div class="card"><table class="tbl">
-    <thead><tr><th>Colaborador</th><th>Área</th><th>Cargo</th><th>Admissão</th><th></th></tr></thead>
+    <thead><tr><th>Colaborador</th><th>Área</th><th>Cargo</th><th></th></tr></thead>
     <tbody>${colaboradores.map(c=>`<tr>
       <td><div style="display:flex;align-items:center;gap:11px;cursor:pointer" onclick="abrirColaborador('${c.id}')" title="Ver ficha completa">${avatarHtml(c,34)}<div><b>${esc(c.nome)}</b><br><span class="page-sub mono">@${esc(c.login)}</span></div></div></td>
       <td>${c.areaNome?`<span class="pill cyan">${esc(c.areaNome)}</span>`:'<span class="pill gray">sem área</span>'}</td>
       <td>${c.cargoNome?`<span class="pill gold">${esc(c.cargoNome)}</span>`:'<span class="pill gray">sem cargo</span>'}</td>
-      <td class="page-sub">${fmtDay(c.dataAdmissao)}</td>
       <td class="row-actions">
         <button class="btn btn-ghost btn-sm" onclick='modalAtribuir(${JSON.stringify(c).replace(/'/g,"&#39;")})'>Atribuir</button>
         <button class="btn btn-ghost btn-sm btn-icon" title="Feedbacks" onclick="abrirFeedbacks('${c.id}','${esc(c.nome)}')">${ICON.message}</button>
         <button class="btn btn-ghost btn-sm btn-icon" title="Nova avaliação" onclick="iniciarAvaliacao('${c.id}','${esc(c.nome)}')">${ICON.chart}</button>
         <button class="btn btn-ghost btn-sm btn-icon" title="Senha" onclick="modalResetSenha('${c.id}','${esc(c.nome)}')">${ICON.key}</button>
+        ${idsLidero.has(c.areaId)?`<button class="btn btn-ghost btn-sm" title="Liberar da equipe" onclick="liberarPessoa('${c.id}','${esc(c.nome)}',()=>go('colaboradores'))">Liberar</button>`:''}
       </td></tr>`).join('')}</tbody></table></div>`;
 };
+async function modalAtribuirDisponivel(){
+  const areas=(S.cache.areas||[]); const areasLidero=(S.cache.areasLidero||[]).length?S.cache.areasLidero:areas.filter(a=>String(a.responsavelId||'')===String(S.user.id));
+  if(!areasLidero.length){ return modal({title:'Sem área sob sua liderança', body:`<div class="inline-note">${ICON.info}<span>Você precisa ser responsável por uma área para adicionar pessoas.</span></div>`, footer:`<button class="btn btn-primary" onclick="closeModal()">Entendi</button>`}); }
+  const {disponiveis}=await api('listarDisponiveis');
+  if(!disponiveis.length){ return modal({title:'Adicionar disponível', body:`<div class="inline-note">${ICON.info}<span>Não há pessoas disponíveis no momento. Crie novas em "Nova pessoa" ou peça para liberarem alguém de outra área.</span></div>`, footer:`<button class="btn btn-primary" onclick="closeModal()">Entendi</button>`}); }
+  modal({title:'Adicionar pessoa disponível', body:`<form id="fAD">
+    <div class="field"><label>Pessoa disponível</label><select name="colaboradorId" required>${disponiveis.map(u=>`<option value="${u.id}">${esc(u.nome)} (@${esc(u.login)})${u.cargoNome?' · '+esc(u.cargoNome):''}</option>`).join('')}</select></div>
+    <div class="field"><label>Adicionar à área</label><select name="areaId" required>${areasLidero.map(a=>`<option value="${a.id}">${esc(a.nome)}</option>`).join('')}</select></div>
+  </form>`, footer:`<button class="btn btn-ghost" onclick="closeModal()">Cancelar</button><button class="btn btn-primary" id="bAD">Adicionar</button>`});
+  el('bAD').onclick=async()=>{ const f=el('fAD'); if(!f.reportValidity())return; const d=Object.fromEntries(new FormData(f)); const b=el('bAD');b.disabled=true;
+    try{ await api('atribuirMembro',{colaboradorId:d.colaboradorId,areaId:d.areaId}); toast('Pessoa adicionada.','ok'); closeModal(); go('colaboradores'); }catch(e){ toast(e.message,'err'); b.disabled=false; } };
+}
 async function abrirColaborador(id){
   loading();
   try{
@@ -1058,7 +1081,7 @@ VIEWS.organograma = async function(){
     if(S.user.perfil==='admin') return el('content').innerHTML = emptyState('Monte sua empresa','Crie a Empresa (o topo do organograma) e o responsável por ela.','Criar Empresa',"modalNovaArea('','')");
     return el('content').innerHTML = emptyState('Organograma em construção','A estrutura ainda não foi criada pelo administrador.','','');
   }
-  el('content').innerHTML = `<div class="org-tree">${roots.map(r=>orgNode(r,areas)).join('')}</div>`;
+  el('content').innerHTML = `<div class="org-tree"><ul>${roots.map(r=>orgNode(r,areas)).join('')}</ul></div>`;
 };
 function orgPodeGerir(a){ return S.user.perfil==='admin' || String(a.responsavelId)===String(S.user.id); }
 function orgNode(a, areas){
@@ -1066,7 +1089,7 @@ function orgNode(a, areas){
   const gerir = orgPodeGerir(a);
   const transf = orgCanTransfer(a);
   const aj = JSON.stringify(a).replace(/'/g,"&#39;");
-  return `<div class="org-node">
+  return `<li>
     <div class="org-card">
       <div class="org-card-h">${esc(a.nome)} ${a.paiId?'':'<span class="pill gold">Empresa</span>'}</div>
       <div class="org-resp">${ICON.users} ${a.responsavelNome?esc(a.responsavelNome):'<span style="color:var(--red)">sem responsável</span>'}</div>
@@ -1080,8 +1103,8 @@ function orgNode(a, areas){
         ${gerir&&a.paiId?`<button class="btn btn-danger btn-sm btn-icon" title="Excluir" onclick="excluirArea('${a.id}','${esc(a.nome)}')">${ICON.trash}</button>`:''}
       </div>`:''}
     </div>
-    ${filhos.length?`<div class="org-children">${filhos.map(c=>orgNode(c,areas)).join('')}</div>`:''}
-  </div>`;
+    ${filhos.length?`<ul>${filhos.map(c=>orgNode(c,areas)).join('')}</ul>`:''}
+  </li>`;
 }
 function orgCanTransfer(a){
   if(S.user.perfil==='admin') return true;
@@ -1106,11 +1129,9 @@ function modalMoverArea(a){
 }
 async function modalNovaArea(paiId,paiNome){
   const raiz = !paiId;
-  const areas=S.cache.areas||[];
-  const ocupados=new Set(areas.map(a=>String(a.responsavelId)).filter(Boolean));
   let candidatos=[];
-  if(S.user.perfil==='admin'){ const {usuarios}=await api('listarUsuarios'); candidatos=usuarios.filter(u=>String(u.ativo)!=='false'&&!ocupados.has(String(u.id))); }
-  else { const {colaboradores}=await api('listarColaboradores'); candidatos=(colaboradores||[]).filter(c=>!ocupados.has(String(c.id))); }
+  if(S.user.perfil==='admin'){ const {usuarios}=await api('listarUsuarios'); candidatos=usuarios.filter(u=>String(u.ativo)!=='false'); }
+  else { const {colaboradores}=await api('listarColaboradores'); candidatos=(colaboradores||[]); }
   if(!candidatos.length){
     return modal({title: raiz?'Criar Empresa':'Nova subárea', body:`<div class="inline-note">${ICON.info}<span>${S.user.perfil==='admin'?'Crie primeiro um <b>usuário</b> na tela <b>Usuários</b> e depois volte para atribuí-lo como responsável.':'Cadastre primeiro uma <b>pessoa na sua equipe</b> (em Minha equipe) e depois torne-a responsável desta nova área.'}</span></div>`, footer:`<button class="btn btn-primary" onclick="closeModal()">Entendi</button>`});
   }
@@ -1134,24 +1155,47 @@ function modalEditarArea(a){
   el('bEA').onclick=async()=>{ const d=Object.fromEntries(new FormData(el('fEA'))); const b=el('bEA');b.disabled=true;
     try{ await api('atualizarArea',{id:a.id,nome:d.nome,descricao:d.descricao}); toast('Área atualizada.','ok'); closeModal(); go('organograma'); }catch(e){ toast(e.message,'err'); b.disabled=false; } };
 }
+function apToggle(v){ const n=el('apNew'); if(n) n.style.display=(v==='__new__')?'block':'none'; }
 async function modalAddPessoa(areaId,areaNome){
-  const {cargos}=await api('listarCargos');
-  modal({title:`Nova pessoa · ${areaNome}`, body:`<form id="fAP">
-    <div class="field"><label>Nome completo</label><input name="nome" required/></div>
-    <div class="form-row"><div class="field"><label>E-mail</label><input name="email" type="email"/></div><div class="field"><label>Telefone</label><input name="telefone"/></div></div>
-    <div class="form-row"><div class="field"><label>Login</label><input name="login" required/></div><div class="field"><label>Senha</label>${pwd('senha')}</div></div>
-    <div class="form-row"><div class="field"><label>Cargo</label><select name="cargoId"><option value="">— sem cargo —</option>${cargos.map(c=>`<option value="${c.id}">${esc(c.nome)}</option>`).join('')}</select></div><div class="field"><label>Salário (R$)</label><input name="salario" type="number" step="0.01" min="0"/><div class="hint">Só o superior imediato vê e define.</div></div></div>
-  </form>`, footer:`<button class="btn btn-ghost" onclick="closeModal()">Cancelar</button><button class="btn btn-primary" id="bAP">Cadastrar</button>`});
-  el('bAP').onclick=async()=>{ const f=el('fAP'); if(!f.reportValidity())return; const d=Object.fromEntries(new FormData(f)); const b=el('bAP');b.disabled=true;
-    try{ await api('criarUsuario',Object.assign({areaId:areaId},d)); toast('Pessoa cadastrada.','ok'); closeModal(); go('organograma'); }catch(e){ toast(e.message,'err'); b.disabled=false; } };
+  const [{cargos},{disponiveis}]=await Promise.all([api('listarCargos'),api('listarDisponiveis')]);
+  modal({title:`Adicionar pessoa · ${areaNome}`, body:`<form id="fAP">
+    <div class="field"><label>Pessoa</label>
+      <select name="modo" oninput="apToggle(this.value)">
+        <option value="">— Escolher disponível —</option>
+        ${disponiveis.map(u=>`<option value="${u.id}">${esc(u.nome)} (@${esc(u.login)})${u.cargoNome?' · '+esc(u.cargoNome):''}</option>`).join('')}
+        <option value="__new__">➕ Criar nova pessoa</option>
+      </select>
+      <div class="hint">${disponiveis.length?'Escolha alguém do banco de disponíveis ou crie uma pessoa nova.':'Não há pessoas disponíveis — crie uma nova.'}</div>
+    </div>
+    <div id="apNew" style="display:none">
+      <div class="field"><label>Nome completo</label><input name="nome"/></div>
+      <div class="form-row"><div class="field"><label>E-mail</label><input name="email" type="email"/></div><div class="field"><label>Telefone</label><input name="telefone"/></div></div>
+      <div class="form-row"><div class="field"><label>Login</label><input name="login"/></div><div class="field"><label>Senha</label>${pwd('senha')}</div></div>
+      <div class="form-row"><div class="field"><label>Cargo</label><select name="cargoId"><option value="">— sem cargo —</option>${cargos.map(c=>`<option value="${c.id}">${esc(c.nome)}</option>`).join('')}</select></div><div class="field"><label>Salário (R$)</label><input name="salario" type="number" step="0.01" min="0"/></div></div>
+    </div>
+  </form>`, footer:`<button class="btn btn-ghost" onclick="closeModal()">Cancelar</button><button class="btn btn-primary" id="bAP">Adicionar</button>`});
+  el('bAP').onclick=async()=>{ const d=Object.fromEntries(new FormData(el('fAP'))); const b=el('bAP');b.disabled=true;
+    try{
+      if(d.modo==='__new__'){ if(!d.nome||!d.login||!d.senha){ toast('Preencha nome, login e senha.','err'); b.disabled=false; return; } await api('criarUsuario',{areaId:areaId,nome:d.nome,email:d.email,telefone:d.telefone,login:d.login,senha:d.senha,cargoId:d.cargoId,salario:d.salario}); }
+      else if(d.modo){ await api('atribuirMembro',{colaboradorId:d.modo,areaId:areaId}); }
+      else { toast('Escolha uma pessoa ou crie uma nova.','err'); b.disabled=false; return; }
+      toast('Pessoa adicionada à área.','ok'); closeModal(); go('organograma');
+    }catch(e){ toast(e.message,'err'); b.disabled=false; } };
+}
+async function liberarPessoa(id,nome,voltar){
+  confirmar(`Liberar "${nome}" da equipe? A pessoa fica disponível para ser atribuída a outra área.`, async()=>{
+    try{ await api('liberarMembro',{colaboradorId:id}); toast('Pessoa liberada.','ok'); if(voltar) voltar(); }catch(e){ toast(e.message,'err'); }
+  });
 }
 async function verMembros(areaId,areaNome){
+  const areas=S.cache.areas||[]; const area=areas.find(a=>a.id===areaId)||{};
+  const podeGerir = S.user.perfil==='admin' || String(area.responsavelId||'')===String(S.user.id);
   const {colaboradores}=await api('listarColaboradores');
   const membros=(colaboradores||[]).filter(c=>c.areaId===areaId);
   modal({wide:true,title:`Pessoas · ${areaNome}`, body: membros.length?`<table class="tbl"><tbody>${membros.map(c=>`<tr>
     <td><div style="display:flex;align-items:center;gap:10px">${avatarHtml(c,32)}<div><b>${esc(c.nome)}</b><br><span class="page-sub mono">@${esc(c.login)}</span></div></div></td>
     <td>${c.cargoNome?`<span class="pill gold">${esc(c.cargoNome)}</span>`:'<span class="pill gray">sem cargo</span>'}</td>
-    <td class="row-actions"><button class="btn btn-ghost btn-sm" onclick="closeModal();abrirColaborador('${c.id}')">Ficha</button></td>
+    <td class="row-actions"><button class="btn btn-ghost btn-sm" onclick="closeModal();abrirColaborador('${c.id}')">Ficha</button>${(podeGerir && String(area.responsavelId||'')!==String(c.id))?`<button class="btn btn-ghost btn-sm" onclick="liberarPessoa('${c.id}','${esc(c.nome)}',()=>{closeModal();verMembros('${areaId}','${esc(areaNome)}');})">Liberar</button>`:''}</td>
   </tr>`).join('')}</tbody></table>`:`<div class="empty">${ICON.users}<p>Nenhuma pessoa nesta área ainda.</p></div>`});
 }
 
