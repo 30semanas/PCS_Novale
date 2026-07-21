@@ -290,15 +290,17 @@ fieldset legend{font-size:.76rem;font-weight:700;color:var(--cyan-bright);paddin
 .org-tree li:last-child::before{border-right:2px solid rgba(72,198,247,.30)}
 .org-tree li:first-child::after{border-left:2px solid rgba(72,198,247,.30)}
 .org-tree ul ul::before{content:'';position:absolute;top:0;left:50%;height:20px;border-left:2px solid rgba(72,198,247,.30)}
-.org-tree>ul,.org-tree>ul>li{padding-top:0}
+.org-tree>ul{display:inline-flex;min-width:100%;box-sizing:border-box;padding:0 32px}
+.org-tree>ul>li{padding-top:0}
 .org-tree>ul>li::before,.org-tree>ul>li::after{display:none}
-.org-card{background:var(--card2,#182140);border:1px solid rgba(255,255,255,.09);border-radius:12px;padding:11px 13px;width:216px;box-shadow:0 5px 14px rgba(0,0,0,.24)}
+.org-card{position:relative;background:var(--card2,#182140);border:1px solid rgba(255,255,255,.09);border-radius:12px;padding:11px 13px;width:214px;min-height:78px;box-shadow:0 5px 14px rgba(0,0,0,.24)}
 .org-card-h{display:flex;align-items:flex-start;justify-content:space-between;gap:8px;font-family:'Sora',system-ui,sans-serif;font-weight:600;font-size:.95rem;line-height:1.2}
 .org-name{display:flex;align-items:center;gap:6px;flex-wrap:wrap;min-width:0}
 .org-resp{color:var(--muted,#8D99B8);font-size:.8rem;margin-top:5px;display:flex;align-items:center;gap:6px}
 .org-resp svg{width:13px;height:13px;flex:none}
 .org-meta{margin-top:8px;display:flex;gap:7px;flex-wrap:wrap;align-items:center}
-.org-actions{display:flex;gap:5px;flex-wrap:wrap;margin-top:10px}
+.org-actions{position:absolute;left:8px;right:8px;bottom:8px;display:none;gap:5px;flex-wrap:wrap;justify-content:center;background:rgba(16,23,48,.97);border:1px solid rgba(255,255,255,.12);border-radius:10px;padding:6px;box-shadow:0 6px 16px rgba(0,0,0,.4)}
+.org-card:hover .org-actions{display:flex}
 .org-actions .btn{padding:4px 6px}
 .org-actions .btn svg{width:15px;height:15px}
 .org-card .pill{font-size:.7rem;padding:2px 8px}
@@ -1109,10 +1111,10 @@ function orgNode(a, areas){
   const collapsed = !!(S.cache.orgCollapsed && S.cache.orgCollapsed.has(a.id));
   const aj = JSON.stringify(a).replace(/'/g,"&#39;");
   return `<li>
-    <div class="org-card">
+    <div class="org-card"${a.descricao?` title="${esc(a.descricao)}"`:''}>
       <div class="org-card-h"><span class="org-name">${esc(a.nome)} ${a.paiId?'':'<span class="pill gold">Empresa</span>'}</span>${filhos.length?`<button class="org-toggle ${collapsed?'closed':''}" title="${collapsed?('Abrir '+filhos.length+' área(s) abaixo'):'Agrupar'}" onclick="toggleOrg('${a.id}')">${ICON.chevron}</button>`:''}</div>
       <div class="org-resp">${ICON.users} ${a.responsavelNome?esc(a.responsavelNome):'<span style="color:var(--red)">sem responsável</span>'}</div>
-      <div class="org-meta"><span class="pill cyan"><span class="dot"></span>${a.qtdMembros}</span>${(collapsed&&filhos.length)?`<span class="pill gold">+${filhos.length} área(s)</span>`:''}${a.descricao?`<span class="page-sub" style="font-size:.72rem">${esc(a.descricao)}</span>`:''}</div>
+      <div class="org-meta"><span class="pill cyan"><span class="dot"></span>${a.qtdMembros}</span>${(collapsed&&filhos.length)?`<span class="pill gold">+${filhos.length} área(s)</span>`:''}</div>
       ${(gerir||transf)?`<div class="org-actions">
         ${gerir?`<button class="btn btn-ghost btn-sm btn-icon" title="Nova subárea" onclick='modalNovaArea("${a.id}","${esc(a.nome)}")'>${ICON.plus}</button>
         <button class="btn btn-ghost btn-sm btn-icon" title="Adicionar pessoa" onclick='modalAddPessoa("${a.id}","${esc(a.nome)}")'>${ICON.users}</button>
