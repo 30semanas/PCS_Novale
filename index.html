@@ -475,13 +475,13 @@ function buildNav(){
   if(u.perfil==='admin') return [
     {id:'dashboard', label:'Painel', icon:'dash'},
     {id:'organograma', label:'Organograma', icon:'building'},
-    {id:'cargos', label:'Cargos & Salários', icon:'badge'},
+    {id:'cargos', label:'Cargos', icon:'badge'},
     {id:'usuarios', label:'Usuários', icon:'users'}
   ];
   const cap=u.capacidades||{}; const nav=[{id:'dashboard', label:'Meu painel', icon:'dash'},{id:'organograma', label:'Organograma', icon:'building'}];
   if(cap.gerencia) nav.push(
     {id:'colaboradores', label:'Minha equipe', icon:'users'},
-    {id:'cargos', label:'Cargos & Salários', icon:'badge'},
+    {id:'cargos', label:'Cargos', icon:'badge'},
     {id:'avaliacoes', label:'Avaliações', icon:'chart'}
   );
   if(cap.avaliado) nav.push(
@@ -707,7 +707,7 @@ async function excluirGerencia(id,nome){
 
 /* ---------------- ADMIN · USUÁRIOS ---------------- */
 VIEWS.usuarios = async function(){
-  setHead('Usuários','Todas as contas cadastradas no sistema');
+  setHead('Usuários','Todas as contas do sistema. Crie usuários aqui para depois torná-los responsáveis por áreas.', `<button class="btn btn-primary" onclick="modalNovoUsuarioAdmin()">${ICON.plus}<span>Novo usuário</span></button>`);
   const {usuarios} = await api('listarUsuarios');
   el('content').innerHTML = `<div class="card"><table class="tbl">
     <thead><tr><th>Nome</th><th>Login</th><th>Papel / Área</th><th>Status</th><th></th></tr></thead>
@@ -802,6 +802,23 @@ function modalPerfil(){
 function closeSidebarIfMobile(){ if(window.innerWidth<=900) toggleSidebar(false); }
 
 /* ---------------- GERENTE · ÁREAS ---------------- */
+async function modalNovoUsuarioAdmin(){
+  const [areas,{cargos}] = await Promise.all([ api('listarAreas').then(r=>r.areas), api('listarCargos') ]);
+  modal({title:'Novo usuário', body:`<form id="fNU">
+    <div class="field"><label>Nome completo</label><input name="nome" required/></div>
+    <div class="form-row"><div class="field"><label>E-mail</label><input name="email" type="email"/></div><div class="field"><label>Telefone</label><input name="telefone"/></div></div>
+    <div class="form-row"><div class="field"><label>Login</label><input name="login" required/></div><div class="field"><label>Senha</label>${pwd('senha')}</div></div>
+    <div class="form-row">
+      <div class="field"><label>Área (opcional)</label><select name="areaId"><option value="">— sem área (atribuir depois) —</option>${areas.map(a=>`<option value="${a.id}">${esc(a.nome)}</option>`).join('')}</select></div>
+      <div class="field"><label>Cargo (opcional)</label><select name="cargoId"><option value="">— sem cargo —</option>${cargos.map(c=>`<option value="${c.id}">${esc(c.nome)}</option>`).join('')}</select></div>
+    </div>
+    <div class="field"><label>Salário (opcional, R$)</label><input name="salario" type="number" step="0.01" min="0"/><div class="hint">Visível apenas para o superior imediato.</div></div>
+    <div class="hint">Deixe sem área para criar o usuário no "pool" e depois atribuí-lo como responsável de uma área no Organograma.</div>
+  </form>`, footer:`<button class="btn btn-ghost" onclick="closeModal()">Cancelar</button><button class="btn btn-primary" id="bNU">Criar usuário</button>`});
+  el('bNU').onclick=async()=>{ const f=el('fNU'); if(!f.reportValidity())return; const d=Object.fromEntries(new FormData(f)); const b=el('bNU');b.disabled=true;
+    try{ await api('criarUsuario',d); toast('Usuário criado.','ok'); closeModal(); go('usuarios'); }catch(e){ toast(e.message,'err'); b.disabled=false; } };
+}
+
 VIEWS.areas = async function(){
   setHead('Áreas','Subdivisões da sua gerência', `<button class="btn btn-primary" onclick="modalArea()">${ICON.plus}<span>Nova área</span></button>`);
   const areas = await api('listarAreas').then(r=>r.areas);
@@ -823,10 +840,10 @@ async function excluirArea(id,nome){ confirmar(`Remover a área "${nome}"?`, asy
 
 /* ---------------- GERENTE · CARGOS ---------------- */
 VIEWS.cargos = async function(){
-  setHead('Cargos & Salários','Estrutura de cargos, remuneração e avanço de função', `<button class="btn btn-primary" onclick="modalCargo()">${ICON.plus}<span>Novo cargo</span></button>`);
+  setHead('Cargos','Definição dos cargos e do avanço de função. O salário de cada pessoa é definido pelo superior imediato.', `<button class="btn btn-primary" onclick="modalCargo()">${ICON.plus}<span>Novo cargo</span></button>`);
   const {cargos} = await api('listarCargos');
   S.cache.cargos = cargos;
-  if(!cargos.length) return el('content').innerHTML = emptyState('Nenhum cargo cadastrado','Cadastre os cargos da sua equipe com objetivo, competências, salário e % de avanço.','Novo cargo','modalCargo()');
+  if(!cargos.length) return el('content').innerHTML = emptyState('Nenhum cargo cadastrado','Cadastre os cargos com objetivo, competências e % de avanço de função.','Novo cargo','modalCargo()');
   el('content').innerHTML = `<div class="grid cols-2">${cargos.map(c=>{
     const comps = String(c.competencias||'').split(/[,;\n]/).map(x=>x.trim()).filter(Boolean);
     return `<div class="card">
@@ -841,9 +858,9 @@ VIEWS.cargos = async function(){
         ${c.criteriosPromocao?`<div><div class="k">Critérios para promoção</div><div class="v">${esc(c.criteriosPromocao)}</div></div>`:''}
         ${comps.length?`<div><div class="k">Competências</div><div class="chip-tags">${comps.map(x=>`<span class="tag">${esc(x)}</span>`).join('')}</div></div>`:''}
       </div>
-      <div style="display:flex;gap:20px;align-items:flex-end;margin-top:18px;border-top:1px solid var(--border-soft);padding-top:16px">
-        <div><div class="k" style="font-size:.7rem;color:var(--muted2);font-weight:700;text-transform:uppercase">Salário base</div><div class="big-money">${money(c.salario)}</div></div>
-        <div><div class="k" style="font-size:.7rem;color:var(--muted2);font-weight:700;text-transform:uppercase">Avanço de função</div><div style="display:flex;align-items:center;gap:8px"><span class="pill cyan">+${Number(c.percentualAvanco||0)}%</span><span class="mono" style="color:var(--green)">${money(c.salarioAvanco)}</span></div></div>
+      <div style="margin-top:18px;border-top:1px solid var(--border-soft);padding-top:16px">
+        <div class="k" style="font-size:.7rem;color:var(--muted2);font-weight:700;text-transform:uppercase">Avanço de função</div>
+        <div style="margin-top:6px"><span class="pill cyan">+${Number(c.percentualAvanco||0)}%</span></div>
       </div>
     </div>`;}).join('')}</div>`;
 };
@@ -855,12 +872,7 @@ function modalCargo(c){
     <div class="field"><label>Perfil esperado</label><textarea name="perfilEsperado" placeholder="Ex.: Aprende os processos, segue procedimentos, busca desenvolvimento e necessita de acompanhamento eventual.">${editing?esc(c.perfilEsperado):''}</textarea></div>
     <div class="field"><label>Critérios para promoção</label><textarea name="criteriosPromocao" placeholder="• Mínimo de 6 meses no nível.&#10;• Domínio das atividades da função.&#10;• Indicadores dentro da meta.">${editing?esc(c.criteriosPromocao):''}</textarea></div>
     <div class="field"><label>Competências</label><input name="competencias" value="${editing?esc(c.competencias):''}" placeholder="Organização, comprometimento, aprendizado, disciplina, qualidade, produtividade"/><div class="hint">Separe por vírgula. Estas competências viram os eixos do gráfico de teia na avaliação.</div></div>
-    <fieldset><legend>Remuneração</legend>
-      <div class="form-row">
-        <div class="field"><label>Salário base (R$)</label><input name="salario" type="number" step="0.01" min="0" value="${editing?c.salario:''}"/></div>
-        <div class="field"><label>% de avanço de função</label><input name="percentualAvanco" type="number" step="0.5" min="0" value="${editing?c.percentualAvanco:''}"/><div class="hint">Percentual de aumento ao avançar de função.</div></div>
-      </div>
-    </fieldset>
+    <div class="field"><label>% de avanço de função</label><input name="percentualAvanco" type="number" step="0.5" min="0" value="${editing?c.percentualAvanco:''}"/><div class="hint">Percentual de aumento ao avançar de função. O salário de cada pessoa é definido pelo superior imediato.</div></div>
   </form>`,
   footer:`<button class="btn btn-ghost" onclick="closeModal()">Cancelar</button><button class="btn btn-primary" id="bC">${editing?'Salvar cargo':'Criar cargo'}</button>`});
   el('bC').onclick=async()=>{ const f=el('fC'); if(!f.reportValidity())return; const d=Object.fromEntries(new FormData(f)); const b=el('bC');b.disabled=true;b.textContent='Salvando…';
@@ -913,7 +925,7 @@ async function abrirColaborador(id){
       ['E-mail', c.email||'—'], ['Telefone', c.telefone||'—'], ['Login', '@'+c.login],
       ['Matrícula', c.matricula||'—'], ['Admissão', fmtDay(c.dataAdmissao)],
       ['Área', c.areaNome||'—'], ['Cargo', c.cargoNome||'—'],
-      cargo?['Salário base', money(cargo.salario)]:null
+      c.salario?['Salário', money(c.salario)]:null
     ].filter(Boolean);
     const avalRows = avals.length ? avals.map(a=>`
       <div class="item-card" style="justify-content:space-between">
@@ -956,7 +968,7 @@ function modalColaborador(){
       <div class="field"><label>Login</label><input name="login" required/></div>
       <div class="field"><label>Matrícula</label><input name="matricula"/></div>
     </div>
-    <div class="field"><label>Senha de acesso</label>${pwd('senha')}</div>
+    <div class="form-row"><div class="field"><label>Senha de acesso</label>${pwd('senha')}</div><div class="field"><label>Salário (R$)</label><input name="salario" type="number" step="0.01" min="0"/><div class="hint">Só o superior imediato vê e define.</div></div></div>
   </form>`, footer:`<button class="btn btn-ghost" onclick="closeModal()">Cancelar</button><button class="btn btn-primary" id="bCo">Cadastrar</button>`});
   el('bCo').onclick=async()=>{ const f=el('fCo'); if(!f.reportValidity())return; const d=Object.fromEntries(new FormData(f)); const b=el('bCo');b.disabled=true;b.textContent='Cadastrando…';
     try{ await api('criarUsuario',d); toast('Pessoa cadastrada.','ok'); closeModal(); go('colaboradores'); }catch(e){ toast(e.message,'err'); b.disabled=false; b.textContent='Cadastrar'; } };
@@ -966,9 +978,10 @@ function modalAtribuir(c){
   modal({title:`Atribuir · ${c.nome}`, body:`<form id="fAt">
     <div class="field"><label>Área</label><select name="areaId"><option value="">— sem área —</option>${areas.map(a=>`<option value="${a.id}" ${a.id===c.areaId?'selected':''}>${esc(a.nome)}</option>`).join('')}</select></div>
     <div class="field"><label>Cargo</label><select name="cargoId"><option value="">— sem cargo —</option>${cargos.map(x=>`<option value="${x.id}" ${x.id===c.cargoId?'selected':''}>${esc(x.nome)}</option>`).join('')}</select></div>
+    <div class="field"><label>Salário (R$)</label><input name="salario" type="number" step="0.01" min="0" value="${c.salario||''}"/><div class="hint">Só o superior imediato vê e define.</div></div>
   </form>`, footer:`<button class="btn btn-ghost" onclick="closeModal()">Cancelar</button><button class="btn btn-primary" id="bAt">Salvar</button>`});
   el('bAt').onclick=async()=>{ const d=Object.fromEntries(new FormData(el('fAt'))); const b=el('bAt');b.disabled=true;
-    try{ await api('atribuirArea',{colaboradorId:c.id,areaId:d.areaId}); await api('atribuirCargo',{colaboradorId:c.id,cargoId:d.cargoId}); toast('Atribuições salvas.','ok'); closeModal(); go('colaboradores'); }
+    try{ await api('atribuirArea',{colaboradorId:c.id,areaId:d.areaId}); await api('atribuirCargo',{colaboradorId:c.id,cargoId:d.cargoId,salario:d.salario}); toast('Atribuições salvas.','ok'); closeModal(); go('colaboradores'); }
     catch(e){ toast(e.message,'err'); b.disabled=false; } };
 }
 async function iniciarAvaliacao(colabId,nome){
@@ -1032,20 +1045,26 @@ function orgNode(a, areas){
     ${filhos.length?`<div class="org-children">${filhos.map(c=>orgNode(c,areas)).join('')}</div>`:''}
   </div>`;
 }
-function modalNovaArea(paiId,paiNome){
+async function modalNovaArea(paiId,paiNome){
   const raiz = !paiId;
+  const areas=S.cache.areas||[];
+  const ocupados=new Set(areas.map(a=>String(a.responsavelId)).filter(Boolean));
+  let candidatos=[];
+  if(S.user.perfil==='admin'){ const {usuarios}=await api('listarUsuarios'); candidatos=usuarios.filter(u=>u.perfil!=='admin'&&String(u.ativo)!=='false'&&!ocupados.has(String(u.id))); }
+  else { const {colaboradores}=await api('listarColaboradores'); candidatos=(colaboradores||[]).filter(c=>!ocupados.has(String(c.id))); }
+  if(!candidatos.length){
+    return modal({title: raiz?'Criar Empresa':'Nova subárea', body:`<div class="inline-note">${ICON.info}<span>${S.user.perfil==='admin'?'Crie primeiro um <b>usuário</b> na tela <b>Usuários</b> e depois volte para atribuí-lo como responsável.':'Cadastre primeiro uma <b>pessoa na sua equipe</b> (em Minha equipe) e depois torne-a responsável desta nova área.'}</span></div>`, footer:`<button class="btn btn-primary" onclick="closeModal()">Entendi</button>`});
+  }
   modal({title: raiz?'Criar Empresa (topo)':`Nova subárea de ${paiNome}`, body:`<form id="fNA">
-    <div class="field"><label>${raiz?'Nome da empresa/área raiz':'Nome da área'}</label><input name="nome" required/></div>
+    <div class="field"><label>${raiz?'Nome da empresa / área raiz':'Nome da área'}</label><input name="nome" required/></div>
     <div class="field"><label>Descrição (opcional)</label><input name="descricao"/></div>
-    <fieldset style="margin-top:12px"><legend>Responsável desta área</legend>
-      <div class="field"><label>Nome</label><input name="rNome" required/></div>
-      <div class="form-row"><div class="field"><label>E-mail</label><input name="rEmail" type="email"/></div><div class="field"><label>Telefone</label><input name="rTelefone"/></div></div>
-      <div class="form-row"><div class="field"><label>Login</label><input name="rLogin" required/></div><div class="field"><label>Senha</label>${pwd('rSenha')}</div></div>
-      <div class="hint">${raiz?'Este será o topo do organograma (ex.: Diretor(a)).':'O responsável responde ao responsável de '+esc(paiNome)+'.'}</div>
-    </fieldset>
+    <div class="field"><label>Responsável (usuário já cadastrado)</label>
+      <select name="responsavelId" required>${candidatos.map(u=>`<option value="${u.id}">${esc(u.nome)} (@${esc(u.login)})</option>`).join('')}</select>
+      <div class="hint">${raiz?'Será o topo do organograma.':'Passará a liderar esta área e responderá ao responsável de '+esc(paiNome)+'.'}</div>
+    </div>
   </form>`, footer:`<button class="btn btn-ghost" onclick="closeModal()">Cancelar</button><button class="btn btn-primary" id="bNA">Criar</button>`});
   el('bNA').onclick=async()=>{ const f=el('fNA'); if(!f.reportValidity())return; const d=Object.fromEntries(new FormData(f)); const b=el('bNA');b.disabled=true;
-    try{ await api('criarArea',{nome:d.nome,descricao:d.descricao,paiId:paiId,responsavel:{nome:d.rNome,email:d.rEmail,telefone:d.rTelefone,login:d.rLogin,senha:d.rSenha}}); toast('Área criada.','ok'); closeModal(); go('organograma'); }
+    try{ await api('criarArea',{nome:d.nome,descricao:d.descricao,paiId:paiId,responsavelId:d.responsavelId}); toast('Área criada.','ok'); closeModal(); go('organograma'); }
     catch(e){ toast(e.message,'err'); b.disabled=false; } };
 }
 function modalEditarArea(a){
@@ -1062,7 +1081,7 @@ async function modalAddPessoa(areaId,areaNome){
     <div class="field"><label>Nome completo</label><input name="nome" required/></div>
     <div class="form-row"><div class="field"><label>E-mail</label><input name="email" type="email"/></div><div class="field"><label>Telefone</label><input name="telefone"/></div></div>
     <div class="form-row"><div class="field"><label>Login</label><input name="login" required/></div><div class="field"><label>Senha</label>${pwd('senha')}</div></div>
-    <div class="field"><label>Cargo</label><select name="cargoId"><option value="">— sem cargo —</option>${cargos.map(c=>`<option value="${c.id}">${esc(c.nome)}</option>`).join('')}</select></div>
+    <div class="form-row"><div class="field"><label>Cargo</label><select name="cargoId"><option value="">— sem cargo —</option>${cargos.map(c=>`<option value="${c.id}">${esc(c.nome)}</option>`).join('')}</select></div><div class="field"><label>Salário (R$)</label><input name="salario" type="number" step="0.01" min="0"/><div class="hint">Só o superior imediato vê e define.</div></div></div>
   </form>`, footer:`<button class="btn btn-ghost" onclick="closeModal()">Cancelar</button><button class="btn btn-primary" id="bAP">Cadastrar</button>`});
   el('bAP').onclick=async()=>{ const f=el('fAP'); if(!f.reportValidity())return; const d=Object.fromEntries(new FormData(f)); const b=el('bAP');b.disabled=true;
     try{ await api('criarUsuario',Object.assign({areaId:areaId},d)); toast('Pessoa cadastrada.','ok'); closeModal(); go('organograma'); }catch(e){ toast(e.message,'err'); b.disabled=false; } };
@@ -1175,7 +1194,7 @@ function scoreCard(p,label){
 function resultBand(av,p){
   const cls=classificarLocal(p===''||p==null?null:Number(p)); if(!cls) return '';
   let extra='';
-  if(cls.nivel==='apto' && S.user.perfil!=='colaborador' && av.cargo && av.cargo.percentualAvanco){
+  if(cls.nivel==='apto' && av.cargo && av.cargo.percentualAvanco){
     const perc=Number(av.cargo.percentualAvanco)||0;
     if(av.cargo.salario){ const novo=Number(av.cargo.salario)*(1+perc/100); extra=` — avanço de +${perc}% (${money(av.cargo.salario)} → ${money(novo)})`; }
     else if(perc) extra=` — avanço de +${perc}%`;
