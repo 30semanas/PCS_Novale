@@ -279,14 +279,18 @@ fieldset legend{font-size:.76rem;font-weight:700;color:var(--cyan-bright);paddin
 .scrim.on{display:block}
 
 /* organograma */
-.org-tree{padding:6px 2px 24px}
-.org-node{margin:8px 0}
-.org-children{margin-left:22px;padding-left:20px;border-left:2px solid rgba(72,198,247,.22)}
-.org-card{background:var(--card2,#182140);border:1px solid rgba(255,255,255,.08);border-radius:14px;padding:12px 14px;max-width:520px;box-shadow:0 4px 14px rgba(0,0,0,.22)}
-.org-card-h{display:flex;align-items:center;gap:8px;font-family:'Sora',system-ui,sans-serif;font-weight:600;font-size:1.02rem}
-.org-resp{color:var(--muted,#8D99B8);font-size:.86rem;margin-top:3px;display:flex;align-items:center;gap:6px}
-.org-meta{margin-top:8px;display:flex;gap:8px;flex-wrap:wrap;align-items:center}
-.org-actions{display:flex;gap:6px;flex-wrap:wrap;margin-top:10px}
+.org-tree{padding:4px 2px 20px}
+.org-node{margin:5px 0}
+.org-children{margin-left:15px;padding-left:13px;border-left:2px solid rgba(72,198,247,.22)}
+.org-card{background:var(--card2,#182140);border:1px solid rgba(255,255,255,.08);border-radius:10px;padding:7px 9px;max-width:255px;box-shadow:0 3px 9px rgba(0,0,0,.2)}
+.org-card-h{display:flex;align-items:center;gap:6px;font-family:'Sora',system-ui,sans-serif;font-weight:600;font-size:.85rem;line-height:1.15}
+.org-resp{color:var(--muted,#8D99B8);font-size:.72rem;margin-top:2px;display:flex;align-items:center;gap:5px}
+.org-resp svg{width:12px;height:12px;flex:none}
+.org-meta{margin-top:5px;display:flex;gap:6px;flex-wrap:wrap;align-items:center}
+.org-actions{display:flex;gap:4px;flex-wrap:wrap;margin-top:7px}
+.org-actions .btn{padding:3px 5px}
+.org-actions .btn svg{width:14px;height:14px}
+.org-card .pill{font-size:.66rem;padding:1px 7px}
 </style>
 </head>
 <body>
@@ -363,6 +367,7 @@ const ICON = {
   message:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M21 15a2 2 0 0 1-2 2H8l-4 4V5a2 2 0 0 1 2-2h13a2 2 0 0 1 2 2v10Z"/></svg>',
   logout:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="m16 17 5-5-5-5M21 12H9"/></svg>',
   plus:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>',
+  move:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M5 9l-3 3 3 3M9 5l3-3 3 3M15 19l-3 3-3-3M19 9l3 3-3 3M2 12h20M12 2v20"/></svg>',
   edit:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.12 2.12 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5Z"/></svg>',
   trash:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2m3 0v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/></svg>',
   key:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="7.5" cy="15.5" r="5.5"/><path d="m21 2-9.6 9.6M15.5 7.5l3 3L22 7l-3-3"/></svg>',
@@ -1028,22 +1033,45 @@ function orgPodeGerir(a){ return S.user.perfil==='admin' || String(a.responsavel
 function orgNode(a, areas){
   const filhos = areas.filter(x=>x.paiId===a.id);
   const gerir = orgPodeGerir(a);
+  const transf = orgCanTransfer(a);
   const aj = JSON.stringify(a).replace(/'/g,"&#39;");
   return `<div class="org-node">
     <div class="org-card">
-      <div class="org-card-h">${esc(a.nome)} ${a.paiId?'':'<span class="pill gold" style="margin-left:6px">Empresa</span>'}</div>
+      <div class="org-card-h">${esc(a.nome)} ${a.paiId?'':'<span class="pill gold">Empresa</span>'}</div>
       <div class="org-resp">${ICON.users} ${a.responsavelNome?esc(a.responsavelNome):'<span style="color:var(--red)">sem responsável</span>'}</div>
-      <div class="org-meta"><span class="pill cyan"><span class="dot"></span>${a.qtdMembros} pessoa(s)</span>${a.descricao?`<span class="page-sub">${esc(a.descricao)}</span>`:''}</div>
-      ${gerir?`<div class="org-actions">
-        <button class="btn btn-ghost btn-sm" onclick='modalNovaArea("${a.id}","${esc(a.nome)}")'>${ICON.plus}<span>Subárea</span></button>
-        <button class="btn btn-ghost btn-sm" onclick='modalAddPessoa("${a.id}","${esc(a.nome)}")'>${ICON.users}<span>Pessoa</span></button>
-        <button class="btn btn-ghost btn-sm" onclick='verMembros("${a.id}","${esc(a.nome)}")'>Ver pessoas</button>
-        <button class="btn btn-ghost btn-sm btn-icon" title="Renomear" onclick='modalEditarArea(${aj})'>${ICON.edit}</button>
-        ${a.paiId?`<button class="btn btn-danger btn-sm btn-icon" title="Excluir" onclick="excluirArea('${a.id}','${esc(a.nome)}')">${ICON.trash}</button>`:''}
+      <div class="org-meta"><span class="pill cyan"><span class="dot"></span>${a.qtdMembros}</span>${a.descricao?`<span class="page-sub" style="font-size:.7rem">${esc(a.descricao)}</span>`:''}</div>
+      ${(gerir||transf)?`<div class="org-actions">
+        ${gerir?`<button class="btn btn-ghost btn-sm btn-icon" title="Nova subárea" onclick='modalNovaArea("${a.id}","${esc(a.nome)}")'>${ICON.plus}</button>
+        <button class="btn btn-ghost btn-sm btn-icon" title="Adicionar pessoa" onclick='modalAddPessoa("${a.id}","${esc(a.nome)}")'>${ICON.users}</button>
+        <button class="btn btn-ghost btn-sm btn-icon" title="Ver pessoas" onclick='verMembros("${a.id}","${esc(a.nome)}")'>${ICON.dash}</button>
+        <button class="btn btn-ghost btn-sm btn-icon" title="Editar" onclick='modalEditarArea(${aj})'>${ICON.edit}</button>`:''}
+        ${transf&&a.paiId?`<button class="btn btn-ghost btn-sm btn-icon" title="Transferir para outra área" onclick='modalMoverArea(${aj})'>${ICON.move}</button>`:''}
+        ${gerir&&a.paiId?`<button class="btn btn-danger btn-sm btn-icon" title="Excluir" onclick="excluirArea('${a.id}','${esc(a.nome)}')">${ICON.trash}</button>`:''}
       </div>`:''}
     </div>
     ${filhos.length?`<div class="org-children">${filhos.map(c=>orgNode(c,areas)).join('')}</div>`:''}
   </div>`;
+}
+function orgCanTransfer(a){
+  if(S.user.perfil==='admin') return true;
+  const areas=S.cache.areas||[]; let cur=a.paiId?areas.find(x=>x.id===a.paiId):null; let g=0;
+  while(cur&&g++<100){ if(String(cur.responsavelId)===String(S.user.id)) return true; cur=cur.paiId?areas.find(x=>x.id===cur.paiId):null; }
+  return false;
+}
+function descendentesIds(id, areas){ const res=[String(id)]; const stack=[String(id)]; while(stack.length){ const c=stack.pop(); areas.forEach(x=>{ if(String(x.paiId)===String(c)){ res.push(String(x.id)); stack.push(String(x.id)); } }); } return res; }
+function modalMoverArea(a){
+  const areas=S.cache.areas||[];
+  const bloq=new Set(descendentesIds(a.id, areas));
+  const destinos=areas.filter(x=>!bloq.has(String(x.id)) && String(x.id)!==String(a.paiId));
+  if(!destinos.length){ return modal({title:'Transferir área', body:`<div class="inline-note">${ICON.info}<span>Não há outra área disponível como destino.</span></div>`, footer:`<button class="btn btn-primary" onclick="closeModal()">Entendi</button>`}); }
+  modal({title:`Transferir "${a.nome}"`, body:`<form id="fMV">
+    <div class="field"><label>Nova área superior</label>
+      <select name="novoPaiId" required>${destinos.map(x=>`<option value="${x.id}">${esc(x.nome)}</option>`).join('')}</select>
+      <div class="hint">A subárea e tudo abaixo dela passam a responder ao responsável da área escolhida.</div>
+    </div>
+  </form>`, footer:`<button class="btn btn-ghost" onclick="closeModal()">Cancelar</button><button class="btn btn-primary" id="bMV">Transferir</button>`});
+  el('bMV').onclick=async()=>{ const f=el('fMV'); if(!f.reportValidity())return; const d=Object.fromEntries(new FormData(f)); const b=el('bMV');b.disabled=true;
+    try{ await api('moverArea',{id:a.id,novoPaiId:d.novoPaiId}); toast('Área transferida.','ok'); closeModal(); go('organograma'); }catch(e){ toast(e.message,'err'); b.disabled=false; } };
 }
 async function modalNovaArea(paiId,paiNome){
   const raiz = !paiId;
