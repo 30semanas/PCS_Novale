@@ -69,6 +69,17 @@ input,textarea,select{font-family:inherit}
   padding:12px 20px;font-weight:600;font-size:.92rem;transition:transform .12s,filter .15s,background .15s;
 }
 .btn:active{transform:translateY(1px)}
+.btn svg{width:17px;height:17px;flex:none;stroke-width:2}
+.btn-sm svg{width:15px;height:15px}
+.nav-item{position:relative}
+.nav-badge{margin-left:auto;background:var(--red);color:#fff;font-size:.7rem;font-weight:800;line-height:1;
+  min-width:19px;height:19px;border-radius:10px;display:inline-grid;place-items:center;padding:0 5px;font-family:var(--f-mono)}
+.yn{display:inline-flex;gap:6px}
+.yn button{padding:6px 15px;border-radius:9px;border:1px solid var(--border);background:var(--bg2);color:var(--muted);
+  font-weight:700;font-size:.82rem;transition:.12s;cursor:pointer}
+.yn button:hover:not(.on){border-color:var(--cyan);color:var(--text)}
+.yn button.sim.on{background:var(--green-soft);border-color:rgba(61,214,140,.5);color:#8FE9BE}
+.yn button.nao.on{background:rgba(242,107,132,.12);border-color:rgba(242,107,132,.5);color:#F6A9B8}
 .btn-primary{background:linear-gradient(135deg,var(--cyan-bright),var(--cyan-deep));color:#04121F;box-shadow:0 8px 24px -8px var(--glow)}
 .btn-primary:hover{filter:brightness(1.07)}
 .btn-block{width:100%}
@@ -485,6 +496,16 @@ function sideFootHtml(){
     <button class="logout-btn" onclick="logout()" title="Sair" aria-label="Sair">${ICON.logout}</button>
   </div>`;
 }
+async function atualizarNotificacoes(){
+  try{ const r=await api('notificacoes'); S.notif=r.notificacoes||{}; pintarBadges(); }catch(e){}
+}
+function pintarBadges(){
+  document.querySelectorAll('.nav-item').forEach(n=>{
+    const c=(S.notif||{})[n.dataset.view]||0; let b=n.querySelector('.nav-badge');
+    if(c>0){ if(!b){ b=document.createElement('span'); b.className='nav-badge'; n.appendChild(b);} b.textContent=c>99?'99+':c; }
+    else if(b){ b.remove(); }
+  });
+}
 function renderApp(){
   const nav = NAV[S.user.perfil] || [];
   el('app').innerHTML = `
@@ -506,6 +527,8 @@ function renderApp(){
     </main>
   </div>`;
   go(nav[0].id);
+  atualizarNotificacoes();
+  if(!S._notifTimer) S._notifTimer=setInterval(atualizarNotificacoes,60000);
 }
 function toggleSidebar(open){ const s=el('sidebar'); const sc=el('scrim'); if(s)s.classList.toggle('open',open); if(sc)sc.classList.toggle('on',open); }
 function setHead(title,sub,actions){
@@ -523,6 +546,8 @@ async function go(view){
     const fn = VIEWS[view];
     if(fn) await fn();
     else el('content').innerHTML = '<div class="empty">Tela não encontrada.</div>';
+    if(view==='meus-feedbacks'){ try{ await api('marcarVisto',{canal:'feedbacks'}); }catch(e){} }
+    atualizarNotificacoes();
   }catch(e){
     el('content').innerHTML = `<div class="card"><div class="inline-note">${ICON.alert}<span>${esc(e.message)}</span></div></div>`;
     if(/sess/i.test(e.message)){ setTimeout(()=>{ S.token=null; store.del('novale_token'); renderLogin(); },1400); }
@@ -853,7 +878,7 @@ VIEWS.colaboradores = async function(){
   el('content').innerHTML = `<div class="card"><table class="tbl">
     <thead><tr><th>Colaborador</th><th>Área</th><th>Cargo</th><th>Admissão</th><th></th></tr></thead>
     <tbody>${colaboradores.map(c=>`<tr>
-      <td><div style="display:flex;align-items:center;gap:11px">${avatarHtml(c,34)}<div><b>${esc(c.nome)}</b><br><span class="page-sub mono">@${esc(c.login)}</span></div></div></td>
+      <td><div style="display:flex;align-items:center;gap:11px;cursor:pointer" onclick="abrirColaborador('${c.id}')" title="Ver ficha completa">${avatarHtml(c,34)}<div><b>${esc(c.nome)}</b><br><span class="page-sub mono">@${esc(c.login)}</span></div></div></td>
       <td>${c.areaNome?`<span class="pill cyan">${esc(c.areaNome)}</span>`:'<span class="pill gray">sem área</span>'}</td>
       <td>${c.cargoNome?`<span class="pill gold">${esc(c.cargoNome)}</span>`:'<span class="pill gray">sem cargo</span>'}</td>
       <td class="page-sub">${fmtDay(c.dataAdmissao)}</td>
@@ -864,6 +889,53 @@ VIEWS.colaboradores = async function(){
         <button class="btn btn-ghost btn-sm btn-icon" title="Senha" onclick="modalResetSenha('${c.id}','${esc(c.nome)}')">${ICON.key}</button>
       </td></tr>`).join('')}</tbody></table></div>`;
 };
+async function abrirColaborador(id){
+  loading();
+  try{
+    const [{colaboradores}, av, fb, {cargos}] = await Promise.all([
+      api('listarColaboradores'),
+      api('listarAvaliacoes',{colaboradorId:id}),
+      api('listarFeedbacks',{colaboradorId:id}),
+      api('listarCargos')
+    ]);
+    const c = colaboradores.find(x=>x.id===id);
+    if(!c){ toast('Colaborador não encontrado.','err'); return go('colaboradores'); }
+    const avals = av.avaliacoes||[], feedbacks = fb.feedbacks||[];
+    const cargo = cargos.find(x=>x.id===c.cargoId);
+    setHead(`Ficha · ${c.nome}`, `${c.areaNome||'sem área'} · ${c.cargoNome||'sem cargo'}`,
+      `<div style="display:flex;gap:8px;flex-wrap:wrap">
+        <button class="btn btn-ghost btn-sm" onclick="go('colaboradores')">Voltar</button>
+        <button class="btn btn-ghost btn-sm" onclick="iniciarAvaliacao('${c.id}','${esc(c.nome)}')">${ICON.chart}<span>Nova avaliação</span></button>
+        <button class="btn btn-ghost btn-sm" onclick="modalResetSenha('${c.id}','${esc(c.nome)}')">${ICON.key}<span>Senha</span></button>
+      </div>`);
+    const info=[
+      ['E-mail', c.email||'—'], ['Telefone', c.telefone||'—'], ['Login', '@'+c.login],
+      ['Matrícula', c.matricula||'—'], ['Admissão', fmtDay(c.dataAdmissao)],
+      ['Área', c.areaNome||'—'], ['Cargo', c.cargoNome||'—'],
+      cargo?['Salário base', money(cargo.salario)]:null
+    ].filter(Boolean);
+    const avalRows = avals.length ? avals.map(a=>`
+      <div class="item-card" style="justify-content:space-between">
+        <div><b>${esc(a.periodo||'Avaliação')}</b><br><span class="page-sub">Consenso: <span class="mono">${nota(a.notaConsenso)}</span>/100 ${a.resultado?`· ${a.resultado.nivel==='apto'?'Elegível':a.resultado.nivel==='desenvolvimento'?'Em desenvolvimento':'Manter nível'}`:''}</span></div>
+        <div style="display:flex;gap:10px;align-items:center">${statusPill(a.status)}<button class="btn btn-primary btn-sm" onclick="abrirAvaliacao('${a.id}')">Abrir</button></div>
+      </div>`).join('') : `<div class="empty">${ICON.chart}<p>Nenhuma avaliação ainda.</p></div>`;
+    el('content').innerHTML=`
+      <div class="card" style="margin-bottom:18px">
+        <div style="display:flex;align-items:center;gap:16px;margin-bottom:6px">${avatarHtml(c,64)}
+          <div><div class="page-title" style="font-size:1.3rem">${esc(c.nome)}</div><div class="page-sub">${c.areaNome||'—'} · ${c.cargoNome||'—'}</div></div></div>
+        <div class="kv" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:16px;margin-top:14px">
+          ${info.map(i=>`<div><div class="k">${i[0]}</div><div class="v">${esc(String(i[1]))}</div></div>`).join('')}
+        </div>
+      </div>
+      <div class="grid cols-2" style="align-items:start">
+        <div class="card"><div class="card-h"><h3>Avaliações</h3><span class="pill gray">${avals.length}</span></div>${avalRows}</div>
+        <div class="card"><div class="card-h"><h3>Feedbacks</h3><span class="pill gray">${feedbacks.length}</span></div>
+          <div style="margin-bottom:14px"><button class="btn btn-primary btn-sm" onclick="abrirFeedbacks('${c.id}','${esc(c.nome)}')">${ICON.plus}<span>Registrar feedback</span></button></div>
+          ${feedbacks.length?renderFbList(feedbacks):`<div class="empty">${ICON.message}<p>Nenhum feedback ainda.</p></div>`}
+        </div>
+      </div>`;
+  }catch(e){ toast(e.message,'err'); go('colaboradores'); }
+}
 function modalColaborador(){
   const areas=S.cache.areas||[], cargos=S.cache.cargos||[];
   modal({title:'Novo colaborador', body:`<form id="fCo">
@@ -1048,28 +1120,46 @@ function rowEscala(kind,ref,labelHtml,val){
     <div class="scale" data-kind="${kind}" data-ref="${esc(String(ref))}">${[0,1,2,3,4,5].map(n=>`<button type="button" class="n${n} ${Number(val)===n?'on':''}" data-n="${n}">${n}</button>`).join('')}</div>
   </div>`;
 }
-function blocoAvaliacao(key,criterios,metas,valores,titulo,footerHtml){
-  valores=valores||{}; const vc=valores.criterios||{}, vm=valores.metas||{};
+function rowSimNao(idx,labelHtml,val){
+  return `<div class="comp-row"><div class="cn">${labelHtml}</div>
+    <div class="yn" data-kind="promo" data-ref="${idx}">
+      <button type="button" class="sim ${val==='sim'?'on':''}" data-v="sim">Sim</button>
+      <button type="button" class="nao ${val==='nao'?'on':''}" data-v="nao">Não</button>
+    </div></div>`;
+}
+function blocoAvaliacao(key,criterios,metas,promocao,valores,titulo,footerHtml){
+  valores=valores||{}; const vc=valores.criterios||{}, vm=valores.metas||{}, vp=valores.promocao||{};
   const critRows=criterios.map(c=>rowEscala('crit',c.chave,`${esc(c.nome)}<small>Peso ${c.peso}%</small>`,vc[c.chave])).join('');
   const metaRows=metas.length?(`<div class="block-title">Metas do consenso anterior <span class="wbadge">Peso ${PESO_METAS_UI}%</span></div>`+
     metas.map((m,i)=>rowEscala('meta',i,`<span class="meta-goal">${esc(m)}</span>`,vm[i])).join('')):'';
+  const promoRows=promocao.length?(`<div class="block-title">Critérios para promoção — o colaborador atende?</div>`+
+    promocao.map((q,i)=>rowSimNao(i,`<span class="meta-goal">${esc(q)}</span>`,vp[i])).join('')):'';
   return `<div class="card-h"><h3>${esc(titulo)}</h3></div>
     <div class="scale-hint"><span>0 = rendimento ruim</span><span>5 = excelente</span></div>
     <div id="scale_${key}">
       <div class="block-title">Critérios de desempenho</div>
       ${critRows}
       ${metaRows}
+      ${promoRows}
     </div>
     <div style="margin-top:18px;display:flex;flex-direction:column;gap:14px">${footerHtml||''}</div>`;
 }
 function coletarNotas(key){
-  const out={criterios:{},metas:{}}; const box=el('scale_'+key); if(!box) return out;
+  const out={criterios:{},metas:{},promocao:{}}; const box=el('scale_'+key); if(!box) return out;
   box.querySelectorAll('.scale').forEach(sc=>{ const on=sc.querySelector('.on'); if(!on) return; const n=Number(on.dataset.n);
     if(sc.dataset.kind==='meta') out.metas[sc.dataset.ref]=n; else out.criterios[sc.dataset.ref]=n; });
+  box.querySelectorAll('.yn').forEach(yn=>{ const on=yn.querySelector('.on'); if(on) out.promocao[yn.dataset.ref]=on.dataset.v; });
   return out;
 }
-function completo(notas,criterios,metas){ return Object.keys(notas.criterios).length>=criterios.length && Object.keys(notas.metas).length>=metas.length; }
+function completo(notas,criterios,metas,promocao){
+  return Object.keys(notas.criterios).length>=criterios.length
+      && Object.keys(notas.metas).length>=metas.length
+      && Object.keys(notas.promocao).length>=(promocao?promocao.length:0);
+}
 function val(id){ const e=el(id); return e?e.value:''; }
+function lockedBlock(titulo,msg){
+  return `<div class="card-h"><h3>${esc(titulo)}</h3></div><div class="inline-note">${ICON.info}<span>${esc(msg)}</span></div>`;
+}
 
 async function abrirAvaliacao(id){
   loading();
@@ -1079,6 +1169,7 @@ async function abrirAvaliacao(id){
   const isColab = S.user.perfil==='colaborador';
   const criterios = av.criterios || [];
   const metas = av.metasAvaliar || [];
+  const promocao = av.promocaoPerguntas || [];
   setHead(`Avaliação · ${av.colaboradorNome||'—'}`, `${av.periodo||''}${av.cargoNome?' · '+av.cargoNome:''}`, `<button class="btn btn-ghost" onclick="go('${isColab?'minhas-avaliacoes':'avaliacoes'}')">Voltar</button>`);
 
   const order=['aguardando_autoavaliacao','aguardando_gestor','aguardando_consenso','concluida'];
@@ -1090,25 +1181,28 @@ async function abrirAvaliacao(id){
     ['Concluída','histórico registrado']
   ].map((s,i)=>`<div class="step ${i<cur?'done':i===cur?'current':''}"><div class="sn">ETAPA ${i+1}</div><div class="st">${s[0]}</div><div class="page-sub" style="margin-top:2px">${s[1]}</div></div>`).join('')}</div>`;
 
+  const bBtn='btn btn-primary btn-sm', bStyle='align-self:flex-start';
   // define editor + qual série está em edição
   let editor='', editKey=null, seed=null;
   if(isColab && av.status==='aguardando_autoavaliacao'){
     editKey='auto'; seed=av.auto;
-    editor = blocoAvaliacao('auto',criterios,metas,av.auto,'Sua autoavaliação',
-      pfpmFields(av)+`<button class="btn btn-primary" id="bAuto">${ICON.check}<span>Enviar autoavaliação</span></button>`);
-  } else if(!isColab && (av.status==='aguardando_gestor'||av.status==='aguardando_autoavaliacao')){
+    editor = blocoAvaliacao('auto',criterios,metas,promocao,av.auto,'Sua autoavaliação',
+      pfpmFields(av)+`<button class="${bBtn}" style="${bStyle}" id="bAuto">${ICON.check}<span>Enviar autoavaliação</span></button>`);
+  } else if(!isColab && av.status==='aguardando_autoavaliacao'){
+    editor = lockedBlock('Avaliação do gestor bloqueada','A avaliação do gestor só é liberada após o colaborador enviar a autoavaliação.');
+  } else if(!isColab && av.status==='aguardando_gestor'){
     editKey='gestor'; seed=av.gestor;
-    editor = blocoAvaliacao('gestor',criterios,metas,av.gestor,'Avaliação do gestor',
-      `<button class="btn btn-primary" id="bGestor">${ICON.check}<span>Enviar avaliação do gestor</span></button>`+
-      (av.status==='aguardando_autoavaliacao'?`<div class="inline-note">${ICON.info}<span>O colaborador ainda não enviou a autoavaliação. Você pode avaliar mesmo assim.</span></div>`:''));
+    editor = blocoAvaliacao('gestor',criterios,metas,promocao,av.gestor,'Avaliação do gestor',
+      `<button class="${bBtn}" style="${bStyle}" id="bGestor">${ICON.check}<span>Enviar avaliação do gestor</span></button>`);
   } else if(!isColab && av.status==='aguardando_consenso'){
-    editKey='consenso'; seed = temNotas(av.consenso)?av.consenso:preConsenso(av,criterios,metas);
-    editor = blocoAvaliacao('consenso',criterios,metas,seed,'Consenso (definido em conjunto)',
+    editKey='consenso'; seed = temNotas(av.consenso)?av.consenso:preConsenso(av,criterios,metas,promocao);
+    editor = blocoAvaliacao('consenso',criterios,metas,promocao,seed,'Consenso (definido em conjunto)',
       pfpmFields(av)+
       `<div class="field"><label>Metas para o próximo ciclo <span class="page-sub">(uma por linha — serão avaliadas na próxima avaliação)</span></label><textarea id="metasNovas" placeholder="Ex.: Reduzir retrabalho para menos de 3%">${esc(av.metasNovas||'')}</textarea></div>`+
       `<div class="field"><label>Feedback para melhoria</label><textarea id="feedback" placeholder="Feedback final consolidado…">${esc(av.feedback||'')}</textarea></div>`+
-      `<div style="display:flex;gap:10px"><button class="btn btn-ghost" id="bSalvarConsenso">Salvar rascunho</button><button class="btn btn-gold" id="bConcluir">${ICON.check}<span>Concluir avaliação</span></button></div>`);
+      `<div style="display:flex;gap:10px"><button class="btn btn-ghost btn-sm" id="bSalvarConsenso">Salvar rascunho</button><button class="btn btn-gold btn-sm" id="bConcluir">${ICON.check}<span>Concluir avaliação</span></button></div>`);
   }
+  const temEditor = !!editKey; // lockedBlock não é editor real
 
   const scoreLabel = editKey?'Pontuação parcial':'Pontuação (consenso)';
   const seedScore = editKey?seed:av.consenso;
@@ -1128,16 +1222,18 @@ async function abrirAvaliacao(id){
     ${editor?`<div class="card section-gap">${resumoAvaliacao(av,isColab)}</div>`:''}`;
 
   renderRadar(el('radarBox'), axesFor(av), montarSeries(av,isColab));
-  ligarEditor(av,criterios,metas,editKey);
+  ligarEditor(av,criterios,metas,promocao,editKey);
   if(editKey) atualizarLive(av,criterios,metas,editKey);
 }
 
-function preConsenso(av,criterios,metas){
-  const out={criterios:{},metas:{}};
+function preConsenso(av,criterios,metas,promocao){
+  const out={criterios:{},metas:{},promocao:{}};
   const ac=(av.auto&&av.auto.criterios)||{}, gc=(av.gestor&&av.gestor.criterios)||{};
   criterios.forEach(c=>{ const a=Number(ac[c.chave]),g=Number(gc[c.chave]); const ha=!isNaN(a),hg=!isNaN(g); if(ha||hg) out.criterios[c.chave]=Math.round(((ha?a:g)+(hg?g:a))/2); });
   const am=(av.auto&&av.auto.metas)||{}, gm=(av.gestor&&av.gestor.metas)||{};
   metas.forEach((m,i)=>{ const a=Number(am[i]),g=Number(gm[i]); const ha=!isNaN(a),hg=!isNaN(g); if(ha||hg) out.metas[i]=Math.round(((ha?a:g)+(hg?g:a))/2); });
+  const ap=(av.auto&&av.auto.promocao)||{}, gp=(av.gestor&&av.gestor.promocao)||{};
+  (promocao||[]).forEach((q,i)=>{ const v=gp[i]||ap[i]; if(v) out.promocao[i]=v; });
   return out;
 }
 
@@ -1149,20 +1245,20 @@ function montarSeries(av,isColab){
   return s;
 }
 
-function ligarEditor(av,criterios,metas,editKey){
-  document.querySelectorAll('.scale button').forEach(b=>{
+function ligarEditor(av,criterios,metas,promocao,editKey){
+  document.querySelectorAll('.scale button, .yn button').forEach(b=>{
     b.onclick=()=>{ b.parentElement.querySelectorAll('button').forEach(x=>x.classList.remove('on')); b.classList.add('on'); atualizarLive(av,criterios,metas,editKey); };
   });
   const bAuto=el('bAuto'); if(bAuto) bAuto.onclick=async()=>{
-    const notas=coletarNotas('auto'); if(!completo(notas,criterios,metas)) return toast('Avalie todos os critérios e metas.','err');
+    const notas=coletarNotas('auto'); if(!completo(notas,criterios,metas,promocao)) return toast('Responda todos os critérios, metas e perguntas de promoção.','err');
     bAuto.disabled=true; try{ await api('salvarAutoAvaliacao',{avaliacaoId:av.id,notas,pontosFortes:val('pf'),pontosMelhoria:val('pm')}); toast('Autoavaliação enviada.','ok'); abrirAvaliacao(av.id);}catch(e){ toast(e.message,'err'); bAuto.disabled=false; }
   };
   const bGestor=el('bGestor'); if(bGestor) bGestor.onclick=async()=>{
-    const notas=coletarNotas('gestor'); if(!completo(notas,criterios,metas)) return toast('Avalie todos os critérios e metas.','err');
+    const notas=coletarNotas('gestor'); if(!completo(notas,criterios,metas,promocao)) return toast('Responda todos os critérios, metas e perguntas de promoção.','err');
     bGestor.disabled=true; try{ await api('salvarAvaliacaoGestor',{avaliacaoId:av.id,notas}); toast('Avaliação do gestor enviada.','ok'); abrirAvaliacao(av.id);}catch(e){ toast(e.message,'err'); bGestor.disabled=false; }
   };
   const salvarCons=async(concluir)=>{
-    const notas=coletarNotas('consenso'); if(concluir && !completo(notas,criterios,metas)) return toast('Defina a nota de consenso de todos os itens.','err');
+    const notas=coletarNotas('consenso'); if(concluir && !completo(notas,criterios,metas,promocao)) return toast('Defina o consenso de todos os itens (critérios, metas e promoção).','err');
     const payload={avaliacaoId:av.id,notas,metas:val('metasNovas'),feedback:val('feedback'),pontosFortes:val('pf'),pontosMelhoria:val('pm'),concluir};
     try{ await api('salvarConsenso',payload); toast(concluir?'Avaliação concluída.':'Rascunho salvo.','ok'); abrirAvaliacao(av.id);}catch(e){ toast(e.message,'err'); }
   };
@@ -1185,6 +1281,18 @@ function atualizarLive(av,criterios,metas,editKey){
   renderRadar(el('radarBox'), axes, filt.length?filt:montarSeries(av,isColab));
 }
 
+function promoResumoHtml(av,isColab){
+  const perg=av.promocaoPerguntas||[]; if(!perg.length) return '';
+  // usa a etapa mais avançada disponível
+  const fonte = (temNotas(av.consenso)&&(av.consenso.promocao)) ? av.consenso.promocao
+              : (!isColab && av.gestor && av.gestor.promocao) ? av.gestor.promocao
+              : (av.auto && av.auto.promocao) ? av.auto.promocao : null;
+  if(!fonte) return '';
+  const atende=perg.filter((q,i)=>fonte[i]==='sim').length;
+  const linhas=perg.map((q,i)=>{ const v=fonte[i]; const cls=v==='sim'?'green':v==='nao'?'red':'gray';
+    return `<div style="display:flex;justify-content:space-between;gap:12px;align-items:center;padding:6px 0;border-bottom:1px solid var(--border-soft)"><span class="v" style="font-size:.86rem">${esc(q)}</span><span class="pill ${cls}"><span class="dot"></span>${v==='sim'?'Sim':v==='nao'?'Não':'—'}</span></div>`;}).join('');
+  return `<div style="margin-top:6px"><div class="k">Critérios para promoção — ${atende}/${perg.length} atendidos</div>${linhas}</div>`;
+}
 function resumoAvaliacao(av,isColab){
   const rows=[];
   if(av.pontosFortes) rows.push(['Pontos fortes',av.pontosFortes]);
@@ -1199,7 +1307,8 @@ function resumoAvaliacao(av,isColab){
       <div><div style="${kt}">Consenso</div><div class="mono" style="font-size:1.3rem;color:var(--green)">${nota(av.notaConsenso)}</div></div>
     </div>
     ${(av.notaConsenso!==''&&av.notaConsenso!=null)?resultBand(av,av.notaConsenso):''}
-    ${rows.length?`<div class="kv">${rows.map(r=>`<div><div class="k">${r[0]}</div><div class="v">${esc(r[1])}</div></div>`).join('')}</div>`:'<p class="page-sub">Ainda sem observações registradas.</p>'}`;
+    ${rows.length?`<div class="kv">${rows.map(r=>`<div><div class="k">${r[0]}</div><div class="v">${esc(r[1])}</div></div>`).join('')}</div>`:'<p class="page-sub">Ainda sem observações registradas.</p>'}
+    ${promoResumoHtml(av,isColab)}`;
 }
 
 /* ================================================================
