@@ -186,13 +186,41 @@ fieldset legend{font-size:.76rem;font-weight:700;color:var(--cyan-bright);paddin
 .legend-swatch{width:13px;height:13px;border-radius:4px}
 
 /* ---------- SCALE INPUT ---------- */
-.scale{display:flex;gap:6px}
-.scale button{width:38px;height:38px;border-radius:10px;border:1px solid var(--border);background:var(--bg2);
-  color:var(--muted);font-weight:700;font-family:var(--f-mono);transition:.12s}
+.scale{display:flex;gap:5px}
+.scale button{width:34px;height:34px;border-radius:9px;border:1px solid var(--border);background:var(--bg2);
+  color:var(--muted);font-weight:700;font-family:var(--f-mono);font-size:.9rem;transition:.12s}
+.scale button:hover:not([disabled]):not(.on){border-color:var(--cyan);color:var(--text)}
 .scale button.on{background:linear-gradient(135deg,var(--cyan-bright),var(--cyan-deep));color:#06121D;border-color:transparent}
+.scale button.n0.on{background:linear-gradient(135deg,#F26B84,#c1435e);color:#fff}
+.scale button[disabled]{opacity:.55;cursor:default}
 .comp-row{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:13px 0;border-bottom:1px solid var(--border-soft)}
 .comp-row:last-child{border-bottom:none}
 .comp-row .cn{font-size:.92rem;font-weight:500}
+.comp-row .cn small{display:block;color:var(--muted2);font-weight:600;font-size:.7rem;text-transform:uppercase;letter-spacing:.05em;margin-top:2px}
+.wbadge{display:inline-block;background:rgba(44,166,224,.13);color:var(--cyan-bright);border:1px solid rgba(44,166,224,.25);
+  font-family:var(--f-mono);font-weight:700;font-size:.68rem;padding:2px 7px;border-radius:6px;margin-left:8px;vertical-align:middle}
+.scale-hint{display:flex;justify-content:space-between;font-size:.7rem;color:var(--muted2);margin:2px 2px 12px}
+.block-title{font-size:.74rem;text-transform:uppercase;letter-spacing:.07em;color:var(--muted2);font-weight:700;margin:20px 0 4px}
+.meta-goal{font-size:.9rem;font-weight:500;line-height:1.45}
+/* ---------- SCORE / RESULTADO ---------- */
+.score-wrap{display:flex;align-items:center;gap:18px;padding:16px 18px;border-radius:14px;background:var(--surface);border:1px solid var(--border-soft);margin-bottom:16px}
+.score-num{font-family:var(--f-mono);font-weight:700;font-size:2.1rem;line-height:1}
+.score-num small{font-size:1rem;color:var(--muted2);font-weight:600}
+.score-meta{flex:1}
+.score-track{height:9px;border-radius:20px;background:var(--bg2);overflow:hidden;margin-top:9px;position:relative}
+.score-track > span{display:block;height:100%;border-radius:20px;transition:width .5s}
+.score-track .tick{position:absolute;top:-3px;width:2px;height:15px;background:var(--muted2);opacity:.5}
+.result-band{border-radius:12px;padding:13px 16px;display:flex;gap:11px;align-items:center;font-size:.9rem;font-weight:600;margin-bottom:16px}
+.result-band svg{width:20px;height:20px;flex:none}
+.result-apto{background:var(--green-soft);border:1px solid rgba(61,214,140,.35);color:#8FE9BE}
+.result-apto svg{color:var(--green)}
+.result-desenvolvimento{background:var(--gold-soft);border:1px solid rgba(232,181,74,.3);color:#F1D89A}
+.result-desenvolvimento svg{color:var(--gold)}
+.result-manter{background:rgba(242,107,132,.1);border:1px solid rgba(242,107,132,.3);color:#F6A9B8}
+.result-manter svg{color:var(--red)}
+.ref-list{display:flex;flex-direction:column;gap:12px}
+.ref-list .k{font-size:.7rem;text-transform:uppercase;letter-spacing:.06em;color:var(--muted2);font-weight:700;margin-bottom:3px}
+.ref-list .v{font-size:.88rem;line-height:1.55;white-space:pre-wrap;color:var(--muted)}
 
 /* ---------- MISC ---------- */
 .spinner{width:40px;height:40px;border:3px solid var(--border);border-top-color:var(--cyan);border-radius:50%;animation:spin .8s linear infinite}
@@ -810,16 +838,17 @@ function renderFbList(fbs){
 
 /* ---------------- AVALIAÇÕES (gerente) ---------------- */
 VIEWS.avaliacoes = async function(){
-  setHead('Avaliações','Ciclos de desempenho da sua equipe');
+  setHead('Avaliações','Pontuação semestral (0–100) e ciclos de desempenho da equipe');
   const {avaliacoes} = await api('listarAvaliacoes');
   if(!avaliacoes.length) return el('content').innerHTML = emptyState('Nenhuma avaliação','Inicie um ciclo de avaliação a partir da tela de Colaboradores.','Ir para colaboradores',"go('colaboradores')");
   el('content').innerHTML = `<div class="card"><table class="tbl">
-    <thead><tr><th>Colaborador</th><th>Período</th><th>Etapa</th><th>Auto</th><th>Gestor</th><th>Consenso</th><th></th></tr></thead>
+    <thead><tr><th>Colaborador</th><th>Período</th><th>Etapa</th><th>Auto</th><th>Gestor</th><th>Consenso</th><th>Resultado</th><th></th></tr></thead>
     <tbody>${avaliacoes.map(a=>`<tr>
       <td><b>${esc(a.colaboradorNome)}</b><br><span class="page-sub">${esc(a.cargoNome||'—')}</span></td>
       <td>${esc(a.periodo||'—')}</td>
       <td>${statusPill(a.status)}</td>
       <td class="mono">${nota(a.notaAuto)}</td><td class="mono">${nota(a.notaGestor)}</td><td class="mono" style="color:var(--green)">${nota(a.notaConsenso)}</td>
+      <td>${a.resultado?`<span class="pill ${a.resultado.nivel==='apto'?'green':a.resultado.nivel==='desenvolvimento'?'gold':'red'}"><span class="dot"></span>${a.resultado.nivel==='apto'?'Apto':a.resultado.nivel==='desenvolvimento'?'Em desenv.':'Manter'}</span>`:'—'}</td>
       <td class="row-actions"><button class="btn btn-primary btn-sm" onclick="abrirAvaliacao('${a.id}')">Abrir</button></td>
     </tr>`).join('')}</tbody></table></div>`;
 };
@@ -836,7 +865,7 @@ VIEWS['minhas-avaliacoes'] = async function(){
     <div class="card"><div class="card-h"><h3>${esc(a.periodo||'Avaliação')}</h3>${statusPill(a.status)}</div>
       <div class="kv" style="gap:8px">
         <div><div class="k">Cargo</div><div class="v">${esc(a.cargoNome||'—')}</div></div>
-        <div style="display:flex;gap:24px"><div><div class="k">Minha nota</div><div class="v mono">${nota(a.notaAuto)}</div></div><div><div class="k">Consenso</div><div class="v mono" style="color:var(--green)">${nota(a.notaConsenso)}</div></div></div>
+        <div style="display:flex;gap:24px"><div><div class="k">Minha pontuação</div><div class="v mono">${nota(a.notaAuto)}<span style="color:var(--muted2);font-size:.8rem">/100</span></div></div><div><div class="k">Consenso</div><div class="v mono" style="color:var(--green)">${nota(a.notaConsenso)}<span style="color:var(--muted2);font-size:.8rem">/100</span></div></div></div>
       </div>
       <button class="btn ${a.status==='aguardando_autoavaliacao'?'btn-primary':'btn-ghost'} btn-block" style="margin-top:16px" onclick="abrirAvaliacao('${a.id}')">${a.status==='aguardando_autoavaliacao'?'Fazer autoavaliação':'Ver detalhes'}</button>
     </div>`).join('')}</div>`;
@@ -865,17 +894,107 @@ VIEWS['meus-feedbacks'] = async function(){
 };
 
 /* ================================================================
- *  TELA DE AVALIAÇÃO (compartilhada)
+ *  TELA DE AVALIAÇÃO (compartilhada) — critérios ponderados 0–5
  * ================================================================ */
+const PESO_METAS_UI = 20;
+const SERIE_INFO = { auto:{name:'Autoavaliação',color:'#48C6F7'}, gestor:{name:'Gestor',color:'#E8B54A'}, consenso:{name:'Consenso',color:'#3DD68C'} };
+
+function temNotas(o){ return o && (Object.keys(o.criterios||{}).length || Object.keys(o.metas||{}).length); }
+function axesFor(av){ const a=(av.criterios||[]).map(c=>c.nome); if((av.metasAvaliar||[]).length) a.push('Metas'); return a; }
+function serieValores(notasObj,criterios,metas){
+  const vc=(notasObj&&notasObj.criterios)||{}, vm=(notasObj&&notasObj.metas)||{};
+  const vals=criterios.map(c=>Number(vc[c.chave]||0));
+  if(metas.length){ const arr=metas.map((m,i)=>Number(vm[i]||0)); vals.push(arr.reduce((a,b)=>a+b,0)/(arr.length||1)); }
+  return vals;
+}
+function pontuarLocal(notas,criterios,metas){
+  let p=0,w=0;
+  criterios.forEach(c=>{ const v=notas.criterios?notas.criterios[c.chave]:undefined; if(v!=null&&v!==''){ p+=(Number(v)/5)*c.peso; w+=c.peso; } });
+  if(metas.length){ const vals=metas.map((m,i)=>notas.metas?notas.metas[i]:undefined).filter(v=>v!=null&&v!==''); if(vals.length){ const avg=vals.reduce((a,b)=>a+Number(b),0)/vals.length; p+=(avg/5)*PESO_METAS_UI; w+=PESO_METAS_UI; } }
+  if(w<=0) return null;
+  return Math.round((p/w)*1000)/10;
+}
+function classificarLocal(p){
+  if(p==null) return null;
+  if(p>=90) return {nivel:'apto',rotulo:'Elegível para promoção / avanço de função'};
+  if(p>=80) return {nivel:'desenvolvimento',rotulo:'Em desenvolvimento'};
+  return {nivel:'manter',rotulo:'Permanecer no nível atual e elaborar plano de desenvolvimento'};
+}
+function scoreCard(p,label){
+  const cls=classificarLocal(p);
+  const color = !cls?'var(--muted)':cls.nivel==='apto'?'var(--green)':cls.nivel==='desenvolvimento'?'var(--gold)':'var(--red)';
+  const pct = p==null?0:Math.max(0,Math.min(100,p));
+  return `<div class="score-wrap">
+    <div class="score-num" style="color:${color}">${p==null?'—':p.toFixed(1)}<small>/100</small></div>
+    <div class="score-meta"><div class="k" style="font-size:.7rem;text-transform:uppercase;letter-spacing:.06em;color:var(--muted2);font-weight:700">${esc(label||'Pontuação')}</div>
+      <div class="score-track"><span style="width:${pct}%;background:${color}"></span><span class="tick" style="left:80%"></span><span class="tick" style="left:90%"></span></div>
+      <div style="display:flex;justify-content:space-between;font-size:.66rem;color:var(--muted2);margin-top:4px"><span>0</span><span>80 · desenv.</span><span>90 · promoção</span></div>
+    </div></div>`;
+}
+function resultBand(av,p){
+  const cls=classificarLocal(p===''||p==null?null:Number(p)); if(!cls) return '';
+  let extra='';
+  if(cls.nivel==='apto' && S.user.perfil!=='colaborador' && av.cargo && av.cargo.percentualAvanco){
+    const perc=Number(av.cargo.percentualAvanco)||0;
+    if(av.cargo.salario){ const novo=Number(av.cargo.salario)*(1+perc/100); extra=` — avanço de +${perc}% (${money(av.cargo.salario)} → ${money(novo)})`; }
+    else if(perc) extra=` — avanço de +${perc}%`;
+  }
+  const icon = cls.nivel==='apto'?ICON.check:ICON.info;
+  return `<div class="result-band result-${cls.nivel}">${icon}<span>${esc(cls.rotulo)}${extra}</span></div>`;
+}
+function cardReferencia(av){
+  const c=av.cargo;
+  const comps=c?String(c.competencias||'').split(/[,;\n]/).map(x=>x.trim()).filter(Boolean):[];
+  return `<div class="card-h"><h3>Sobre a função${c&&c.nome?' — '+esc(c.nome):(av.cargoNome?' — '+esc(av.cargoNome):'')}</h3>${av.areaNome?`<span class="pill cyan"><span class="dot"></span>${esc(av.areaNome)}</span>`:''}</div>
+    ${c?`<div class="ref-list">
+      ${c.objetivo?`<div><div class="k">Objetivo</div><div class="v">${esc(c.objetivo)}</div></div>`:''}
+      ${c.perfilEsperado?`<div><div class="k">Perfil esperado / atribuições</div><div class="v">${esc(c.perfilEsperado)}</div></div>`:''}
+      ${c.criteriosPromocao?`<div><div class="k">Critérios para promoção</div><div class="v">${esc(c.criteriosPromocao)}</div></div>`:''}
+      ${comps.length?`<div><div class="k">Competências do cargo</div><div class="chip-tags">${comps.map(x=>`<span class="tag">${esc(x)}</span>`).join('')}</div></div>`:''}
+    </div>`:'<p class="page-sub">Cargo não informado nesta avaliação.</p>'}`;
+}
+function pfpmFields(av){
+  return `<div class="field"><label>Pontos fortes</label><textarea id="pf">${esc(av.pontosFortes||'')}</textarea></div>
+    <div class="field"><label>Pontos de melhoria</label><textarea id="pm">${esc(av.pontosMelhoria||'')}</textarea></div>`;
+}
+function rowEscala(kind,ref,labelHtml,val){
+  return `<div class="comp-row"><div class="cn">${labelHtml}</div>
+    <div class="scale" data-kind="${kind}" data-ref="${esc(String(ref))}">${[0,1,2,3,4,5].map(n=>`<button type="button" class="n${n} ${Number(val)===n?'on':''}" data-n="${n}">${n}</button>`).join('')}</div>
+  </div>`;
+}
+function blocoAvaliacao(key,criterios,metas,valores,titulo,footerHtml){
+  valores=valores||{}; const vc=valores.criterios||{}, vm=valores.metas||{};
+  const critRows=criterios.map(c=>rowEscala('crit',c.chave,`${esc(c.nome)}<small>Peso ${c.peso}%</small>`,vc[c.chave])).join('');
+  const metaRows=metas.length?(`<div class="block-title">Metas do consenso anterior <span class="wbadge">Peso ${PESO_METAS_UI}%</span></div>`+
+    metas.map((m,i)=>rowEscala('meta',i,`<span class="meta-goal">${esc(m)}</span>`,vm[i])).join('')):'';
+  return `<div class="card-h"><h3>${esc(titulo)}</h3></div>
+    <div class="scale-hint"><span>0 = rendimento ruim</span><span>5 = excelente</span></div>
+    <div id="scale_${key}">
+      <div class="block-title">Critérios de desempenho</div>
+      ${critRows}
+      ${metaRows}
+    </div>
+    <div style="margin-top:18px;display:flex;flex-direction:column;gap:14px">${footerHtml||''}</div>`;
+}
+function coletarNotas(key){
+  const out={criterios:{},metas:{}}; const box=el('scale_'+key); if(!box) return out;
+  box.querySelectorAll('.scale').forEach(sc=>{ const on=sc.querySelector('.on'); if(!on) return; const n=Number(on.dataset.n);
+    if(sc.dataset.kind==='meta') out.metas[sc.dataset.ref]=n; else out.criterios[sc.dataset.ref]=n; });
+  return out;
+}
+function completo(notas,criterios,metas){ return Object.keys(notas.criterios).length>=criterios.length && Object.keys(notas.metas).length>=metas.length; }
+function val(id){ const e=el(id); return e?e.value:''; }
+
 async function abrirAvaliacao(id){
   loading();
-  const av = await api('obterAvaliacao',{avaliacaoId:id});
+  const resp = await api('obterAvaliacao',{avaliacaoId:id});
+  const av = resp.avaliacao || resp;   // o backend responde { avaliacao: {...} }
   S.cache.av = av;
   const isColab = S.user.perfil==='colaborador';
-  const comps = av.competencias;
-  setHead(`Avaliação · ${av.colaboradorNome}`, `${av.periodo||''} · ${av.cargoNome||''}`, `<button class="btn btn-ghost" onclick="go('${isColab?'minhas-avaliacoes':'avaliacoes'}')">Voltar</button>`);
+  const criterios = av.criterios || [];
+  const metas = av.metasAvaliar || [];
+  setHead(`Avaliação · ${av.colaboradorNome||'—'}`, `${av.periodo||''}${av.cargoNome?' · '+av.cargoNome:''}`, `<button class="btn btn-ghost" onclick="go('${isColab?'minhas-avaliacoes':'avaliacoes'}')">Voltar</button>`);
 
-  // etapas
   const order=['aguardando_autoavaliacao','aguardando_gestor','aguardando_consenso','concluida'];
   const cur=order.indexOf(av.status);
   const stepsHtml = `<div class="steps">${[
@@ -885,109 +1004,115 @@ async function abrirAvaliacao(id){
     ['Concluída','histórico registrado']
   ].map((s,i)=>`<div class="step ${i<cur?'done':i===cur?'current':''}"><div class="sn">ETAPA ${i+1}</div><div class="st">${s[0]}</div><div class="page-sub" style="margin-top:2px">${s[1]}</div></div>`).join('')}</div>`;
 
-  // painel de edição conforme perfil/etapa
-  let editor='';
+  // define editor + qual série está em edição
+  let editor='', editKey=null, seed=null;
   if(isColab && av.status==='aguardando_autoavaliacao'){
-    editor = escalaBloco('auto', comps, av.auto, 'Sua autoavaliação', true, `
-      <div class="field"><label>Pontos fortes</label><textarea id="pf">${esc(av.pontosFortes)}</textarea></div>
-      <div class="field"><label>Pontos de melhoria</label><textarea id="pm">${esc(av.pontosMelhoria)}</textarea></div>
-      <button class="btn btn-primary" id="bAuto">Enviar autoavaliação</button>`);
+    editKey='auto'; seed=av.auto;
+    editor = blocoAvaliacao('auto',criterios,metas,av.auto,'Sua autoavaliação',
+      pfpmFields(av)+`<button class="btn btn-primary" id="bAuto">${ICON.check}<span>Enviar autoavaliação</span></button>`);
   } else if(!isColab && (av.status==='aguardando_gestor'||av.status==='aguardando_autoavaliacao')){
-    editor = escalaBloco('gestor', comps, av.gestor, 'Avaliação do gestor', true, `
-      <button class="btn btn-primary" id="bGestor">Enviar avaliação do gestor</button>
-      ${av.status==='aguardando_autoavaliacao'?`<div class="inline-note" style="margin-top:12px">${ICON.info}<span>O colaborador ainda não enviou a autoavaliação. Você pode avaliar mesmo assim.</span></div>`:''}`);
+    editKey='gestor'; seed=av.gestor;
+    editor = blocoAvaliacao('gestor',criterios,metas,av.gestor,'Avaliação do gestor',
+      `<button class="btn btn-primary" id="bGestor">${ICON.check}<span>Enviar avaliação do gestor</span></button>`+
+      (av.status==='aguardando_autoavaliacao'?`<div class="inline-note">${ICON.info}<span>O colaborador ainda não enviou a autoavaliação. Você pode avaliar mesmo assim.</span></div>`:''));
   } else if(!isColab && av.status==='aguardando_consenso'){
-    // pré-preenche consenso com média auto/gestor
-    const pre={}; comps.forEach(c=>{ const a=Number(av.auto[c]||0),g=Number(av.gestor[c]||0); pre[c]= a&&g?Math.round((a+g)/2): (g||a||0); });
-    editor = escalaBloco('consenso', comps, Object.keys(av.consenso).length?av.consenso:pre, 'Consenso (definido em conjunto)', true, `
-      <div class="field"><label>Pontos fortes</label><textarea id="pf">${esc(av.pontosFortes)}</textarea></div>
-      <div class="field"><label>Pontos de melhoria</label><textarea id="pm">${esc(av.pontosMelhoria)}</textarea></div>
-      <div class="field"><label>Metas acordadas</label><textarea id="metas" placeholder="Metas de desenvolvimento para o próximo ciclo…">${esc(av.metas)}</textarea></div>
-      <div class="field"><label>Feedback para melhoria</label><textarea id="feedback" placeholder="Feedback final consolidado…">${esc(av.feedback)}</textarea></div>
-      <div style="display:flex;gap:10px"><button class="btn btn-ghost" id="bSalvarConsenso">Salvar rascunho</button><button class="btn btn-gold" id="bConcluir">${ICON.check}<span>Concluir avaliação</span></button></div>`);
+    editKey='consenso'; seed = temNotas(av.consenso)?av.consenso:preConsenso(av,criterios,metas);
+    editor = blocoAvaliacao('consenso',criterios,metas,seed,'Consenso (definido em conjunto)',
+      pfpmFields(av)+
+      `<div class="field"><label>Metas para o próximo ciclo <span class="page-sub">(uma por linha — serão avaliadas na próxima avaliação)</span></label><textarea id="metasNovas" placeholder="Ex.: Reduzir retrabalho para menos de 3%">${esc(av.metasNovas||'')}</textarea></div>`+
+      `<div class="field"><label>Feedback para melhoria</label><textarea id="feedback" placeholder="Feedback final consolidado…">${esc(av.feedback||'')}</textarea></div>`+
+      `<div style="display:flex;gap:10px"><button class="btn btn-ghost" id="bSalvarConsenso">Salvar rascunho</button><button class="btn btn-gold" id="bConcluir">${ICON.check}<span>Concluir avaliação</span></button></div>`);
   }
+
+  const scoreLabel = editKey?'Pontuação parcial':'Pontuação (consenso)';
+  const seedScore = editKey?seed:av.consenso;
+  const scoreInicial = pontuarLocal(seedScore||{criterios:{},metas:{}},criterios,metas);
+  const bandFinal = (!editKey && av.notaConsenso!==''&&av.notaConsenso!=null)?resultBand(av,av.notaConsenso):'';
 
   el('content').innerHTML = `${stepsHtml}
     <div class="grid cols-2" style="align-items:start">
-      <div class="card"><div class="card-h"><h3>Versatilidade — teia de competências</h3></div><div id="radarBox"></div></div>
+      <div class="card">
+        <div class="card-h"><h3>Versatilidade — teia de competências</h3></div>
+        <div id="radarBox"></div>
+        <div id="scoreLiveBox" style="margin-top:14px">${scoreCard(scoreInicial,scoreLabel)}${bandFinal}</div>
+      </div>
       <div class="card">${editor || resumoAvaliacao(av,isColab)}</div>
     </div>
+    <div class="card section-gap">${cardReferencia(av)}</div>
     ${editor?`<div class="card section-gap">${resumoAvaliacao(av,isColab)}</div>`:''}`;
 
-  renderRadar(el('radarBox'), comps, montarSeries(av,isColab));
-  ligarEditor(av,comps);
+  renderRadar(el('radarBox'), axesFor(av), montarSeries(av,isColab));
+  ligarEditor(av,criterios,metas,editKey);
+  if(editKey) atualizarLive(av,criterios,metas,editKey);
+}
+
+function preConsenso(av,criterios,metas){
+  const out={criterios:{},metas:{}};
+  const ac=(av.auto&&av.auto.criterios)||{}, gc=(av.gestor&&av.gestor.criterios)||{};
+  criterios.forEach(c=>{ const a=Number(ac[c.chave]),g=Number(gc[c.chave]); const ha=!isNaN(a),hg=!isNaN(g); if(ha||hg) out.criterios[c.chave]=Math.round(((ha?a:g)+(hg?g:a))/2); });
+  const am=(av.auto&&av.auto.metas)||{}, gm=(av.gestor&&av.gestor.metas)||{};
+  metas.forEach((m,i)=>{ const a=Number(am[i]),g=Number(gm[i]); const ha=!isNaN(a),hg=!isNaN(g); if(ha||hg) out.metas[i]=Math.round(((ha?a:g)+(hg?g:a))/2); });
+  return out;
 }
 
 function montarSeries(av,isColab){
-  const s=[];
-  if(Object.keys(av.auto).length) s.push({name:'Autoavaliação',color:'#48C6F7',values:av.competencias.map(c=>Number(av.auto[c]||0))});
-  if(!isColab && Object.keys(av.gestor).length) s.push({name:'Gestor',color:'#E8B54A',values:av.competencias.map(c=>Number(av.gestor[c]||0))});
-  if(Object.keys(av.consenso).length) s.push({name:'Consenso',color:'#3DD68C',values:av.competencias.map(c=>Number(av.consenso[c]||0))});
+  const cs=av.criterios||[], ms=av.metasAvaliar||[]; const s=[];
+  if(temNotas(av.auto)) s.push({name:'Autoavaliação',color:'#48C6F7',values:serieValores(av.auto,cs,ms)});
+  if(!isColab && temNotas(av.gestor)) s.push({name:'Gestor',color:'#E8B54A',values:serieValores(av.gestor,cs,ms)});
+  if(temNotas(av.consenso)) s.push({name:'Consenso',color:'#3DD68C',values:serieValores(av.consenso,cs,ms)});
   return s;
 }
 
-function escalaBloco(key,comps,valores,titulo,editable,footerHtml){
-  return `<div class="card-h"><h3>${esc(titulo)}</h3></div>
-    <div id="scale_${key}">${comps.map(c=>`
-      <div class="comp-row"><div class="cn">${esc(c)}</div>
-        <div class="scale" data-comp="${esc(c)}">${[1,2,3,4,5].map(n=>`<button type="button" class="${Number(valores[c])===n?'on':''}" data-n="${n}" ${editable?'':'disabled'}>${n}</button>`).join('')}</div>
-      </div>`).join('')}</div>
-    <div style="margin-top:16px">${footerHtml||''}</div>`;
-}
-
-function coletarNotas(key){
-  const notas={};
-  el('scale_'+key).querySelectorAll('.scale').forEach(sc=>{
-    const on=sc.querySelector('.on'); if(on) notas[sc.dataset.comp]=Number(on.dataset.n);
-  });
-  return notas;
-}
-
-function ligarEditor(av,comps){
-  // escala interativa
-  document.querySelectorAll('.scale button:not([disabled])').forEach(b=>{
-    b.onclick=()=>{ b.parentElement.querySelectorAll('button').forEach(x=>x.classList.remove('on')); b.classList.add('on'); atualizarRadarLive(av); };
+function ligarEditor(av,criterios,metas,editKey){
+  document.querySelectorAll('.scale button').forEach(b=>{
+    b.onclick=()=>{ b.parentElement.querySelectorAll('button').forEach(x=>x.classList.remove('on')); b.classList.add('on'); atualizarLive(av,criterios,metas,editKey); };
   });
   const bAuto=el('bAuto'); if(bAuto) bAuto.onclick=async()=>{
-    const notas=coletarNotas('auto'); if(Object.keys(notas).length<comps.length) return toast('Avalie todas as competências.','err');
-    bAuto.disabled=true; try{ await api('salvarAutoAvaliacao',{avaliacaoId:av.id,notas,pontosFortes:el('pf').value,pontosMelhoria:el('pm').value}); toast('Autoavaliação enviada.','ok'); abrirAvaliacao(av.id); }catch(e){ toast(e.message,'err'); bAuto.disabled=false; }
+    const notas=coletarNotas('auto'); if(!completo(notas,criterios,metas)) return toast('Avalie todos os critérios e metas.','err');
+    bAuto.disabled=true; try{ await api('salvarAutoAvaliacao',{avaliacaoId:av.id,notas,pontosFortes:val('pf'),pontosMelhoria:val('pm')}); toast('Autoavaliação enviada.','ok'); abrirAvaliacao(av.id);}catch(e){ toast(e.message,'err'); bAuto.disabled=false; }
   };
   const bGestor=el('bGestor'); if(bGestor) bGestor.onclick=async()=>{
-    const notas=coletarNotas('gestor'); if(Object.keys(notas).length<comps.length) return toast('Avalie todas as competências.','err');
-    bGestor.disabled=true; try{ await api('salvarAvaliacaoGestor',{avaliacaoId:av.id,notas}); toast('Avaliação do gestor enviada.','ok'); abrirAvaliacao(av.id); }catch(e){ toast(e.message,'err'); bGestor.disabled=false; }
+    const notas=coletarNotas('gestor'); if(!completo(notas,criterios,metas)) return toast('Avalie todos os critérios e metas.','err');
+    bGestor.disabled=true; try{ await api('salvarAvaliacaoGestor',{avaliacaoId:av.id,notas}); toast('Avaliação do gestor enviada.','ok'); abrirAvaliacao(av.id);}catch(e){ toast(e.message,'err'); bGestor.disabled=false; }
   };
   const salvarCons=async(concluir)=>{
-    const notas=coletarNotas('consenso'); if(Object.keys(notas).length<comps.length) return toast('Defina todas as competências.','err');
-    const payload={avaliacaoId:av.id,notas,metas:el('metas').value,feedback:el('feedback').value,pontosFortes:el('pf').value,pontosMelhoria:el('pm').value,concluir};
-    try{ await api('salvarConsenso',payload); toast(concluir?'Avaliação concluída.':'Rascunho salvo.','ok'); abrirAvaliacao(av.id); }catch(e){ toast(e.message,'err'); }
+    const notas=coletarNotas('consenso'); if(concluir && !completo(notas,criterios,metas)) return toast('Defina a nota de consenso de todos os itens.','err');
+    const payload={avaliacaoId:av.id,notas,metas:val('metasNovas'),feedback:val('feedback'),pontosFortes:val('pf'),pontosMelhoria:val('pm'),concluir};
+    try{ await api('salvarConsenso',payload); toast(concluir?'Avaliação concluída.':'Rascunho salvo.','ok'); abrirAvaliacao(av.id);}catch(e){ toast(e.message,'err'); }
   };
   const bs=el('bSalvarConsenso'); if(bs) bs.onclick=()=>salvarCons(false);
-  const bc=el('bConcluir'); if(bc) bc.onclick=()=>confirmar('Concluir a avaliação? As notas de consenso e o feedback serão registrados no histórico.',()=>salvarCons(true));
+  const bc=el('bConcluir'); if(bc) bc.onclick=()=>confirmar('Concluir a avaliação? A pontuação de consenso, a classificação e o feedback serão registrados no histórico.',()=>salvarCons(true));
 }
 
-function atualizarRadarLive(av){
-  // recolhe as escalas ativas na tela e redesenha
-  const s=[];
-  const colab=S.user.perfil==='colaborador';
-  const grab=(key,name,color)=>{ const box=el('scale_'+key); if(!box) return; const notas={}; box.querySelectorAll('.scale').forEach(sc=>{const on=sc.querySelector('.on'); notas[sc.dataset.comp]=on?Number(on.dataset.n):0;}); s.push({name,color,values:av.competencias.map(c=>notas[c]||0)}); };
-  if(colab){ grab('auto','Autoavaliação','#48C6F7'); if(Object.keys(av.gestor).length) s.push({name:'Gestor',color:'#E8B54A',values:av.competencias.map(c=>Number(av.gestor[c]||0))}); }
-  else { if(Object.keys(av.auto).length) s.push({name:'Autoavaliação',color:'#48C6F7',values:av.competencias.map(c=>Number(av.auto[c]||0))}); grab('gestor','Gestor','#E8B54A'); grab('consenso','Consenso','#3DD68C'); }
+function atualizarLive(av,criterios,metas,editKey){
+  const axes=axesFor(av); const isColab=S.user.perfil==='colaborador'; const s=[];
+  const push=(o,name,color)=>{ if(temNotas(o)) s.push({name,color,values:serieValores(o,criterios,metas)}); };
+  if(editKey){
+    const live=coletarNotas(editKey); const info=SERIE_INFO[editKey];
+    s.push({name:info.name,color:info.color,values:serieValores(live,criterios,metas)});
+    const box=el('scoreLiveBox'); if(box) box.innerHTML=scoreCard(pontuarLocal(live,criterios,metas),'Pontuação parcial');
+  }
+  if(editKey!=='auto') push(av.auto,'Autoavaliação','#48C6F7');
+  if(!isColab && editKey!=='gestor') push(av.gestor,'Gestor','#E8B54A');
+  if(!isColab && editKey!=='consenso') push(av.consenso,'Consenso','#3DD68C');
   const filt=s.filter(x=>x.values.some(v=>v>0));
-  renderRadar(el('radarBox'), av.competencias, filt.length?filt:montarSeries(av,colab));
+  renderRadar(el('radarBox'), axes, filt.length?filt:montarSeries(av,isColab));
 }
 
 function resumoAvaliacao(av,isColab){
   const rows=[];
   if(av.pontosFortes) rows.push(['Pontos fortes',av.pontosFortes]);
   if(av.pontosMelhoria) rows.push(['Pontos de melhoria',av.pontosMelhoria]);
-  if(av.metas) rows.push(['Metas acordadas',av.metas]);
+  if(av.metasNovas) rows.push(['Metas para o próximo ciclo',av.metasNovas]);
   if(av.feedback) rows.push(['Feedback',av.feedback]);
+  const kt='font-size:.7rem;color:var(--muted2);font-weight:700;text-transform:uppercase;letter-spacing:.05em';
   return `<div class="card-h"><h3>Resumo</h3>${statusPill(av.status)}</div>
-    <div style="display:flex;gap:22px;margin-bottom:16px">
-      <div><div class="k" style="font-size:.7rem;color:var(--muted2);font-weight:700;text-transform:uppercase">Auto</div><div class="mono" style="font-size:1.3rem">${nota(av.notaAuto)}</div></div>
-      ${!isColab?`<div><div class="k" style="font-size:.7rem;color:var(--muted2);font-weight:700;text-transform:uppercase">Gestor</div><div class="mono" style="font-size:1.3rem;color:var(--gold)">${nota(av.notaGestor)}</div></div>`:''}
-      <div><div class="k" style="font-size:.7rem;color:var(--muted2);font-weight:700;text-transform:uppercase">Consenso</div><div class="mono" style="font-size:1.3rem;color:var(--green)">${nota(av.notaConsenso)}</div></div>
+    <div style="display:flex;gap:22px;margin-bottom:16px;flex-wrap:wrap">
+      <div><div style="${kt}">Auto</div><div class="mono" style="font-size:1.3rem">${nota(av.notaAuto)}</div></div>
+      ${!isColab?`<div><div style="${kt}">Gestor</div><div class="mono" style="font-size:1.3rem;color:var(--gold)">${nota(av.notaGestor)}</div></div>`:''}
+      <div><div style="${kt}">Consenso</div><div class="mono" style="font-size:1.3rem;color:var(--green)">${nota(av.notaConsenso)}</div></div>
     </div>
+    ${(av.notaConsenso!==''&&av.notaConsenso!=null)?resultBand(av,av.notaConsenso):''}
     ${rows.length?`<div class="kv">${rows.map(r=>`<div><div class="k">${r[0]}</div><div class="v">${esc(r[1])}</div></div>`).join('')}</div>`:'<p class="page-sub">Ainda sem observações registradas.</p>'}`;
 }
 
