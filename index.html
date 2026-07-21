@@ -712,18 +712,49 @@ async function excluirGerencia(id,nome){
 
 /* ---------------- ADMIN · USUÁRIOS ---------------- */
 VIEWS.usuarios = async function(){
-  setHead('Usuários','Todas as contas do sistema. Crie usuários aqui para depois torná-los responsáveis por áreas.', `<button class="btn btn-primary" onclick="modalNovoUsuarioAdmin()">${ICON.plus}<span>Novo usuário</span></button>`);
-  const {usuarios} = await api('listarUsuarios');
+  setHead('Usuários','Edite contas, atribua cargo e salário. Crie usuários aqui para depois vinculá-los a áreas.', `<button class="btn btn-primary" onclick="modalNovoUsuarioAdmin()">${ICON.plus}<span>Novo usuário</span></button>`);
+  const [{usuarios},{cargos}] = await Promise.all([ api('listarUsuarios'), api('listarCargos') ]);
+  S.cache.usuarios = usuarios; S.cache.cargos = cargos;
   el('content').innerHTML = `<div class="card"><table class="tbl">
-    <thead><tr><th>Nome</th><th>Login</th><th>Papel / Área</th><th>Status</th><th></th></tr></thead>
+    <thead><tr><th>Nome</th><th>Login</th><th>Papel / Área</th><th>Cargo</th><th>Status</th><th></th></tr></thead>
     <tbody>${usuarios.map(u=>`<tr>
       <td><b>${esc(u.nome)}</b><br><span class="page-sub">${esc(u.email||'')}</span></td>
       <td class="mono">${esc(u.login)}</td>
       <td><span class="pill ${u.perfil==='admin'?'gold':'cyan'}">${esc(u.papel||ROLE_LABEL[u.perfil]||"Usuário")}</span></td>
+      <td>${u.cargoNome?`<span class="pill gold">${esc(u.cargoNome)}</span>`:'<span class="pill gray">—</span>'}</td>
       <td>${String(u.ativo)!=='false'?'<span class="pill green"><span class="dot"></span>Ativo</span>':'<span class="pill red"><span class="dot"></span>Inativo</span>'}</td>
-      <td class="row-actions">${u.perfil!=='admin'?`<button class="btn btn-ghost btn-sm" onclick="modalResetSenha('${u.id}','${esc(u.nome)}')">${ICON.key}</button>`:''}</td>
+      <td class="row-actions">
+        <button class="btn btn-ghost btn-sm" onclick='modalEditarUsuario(${JSON.stringify(u).replace(/'/g,"&#39;")})'>${ICON.edit}<span>Editar</span></button>
+        <button class="btn btn-ghost btn-sm btn-icon" title="Redefinir senha" onclick="modalResetSenha('${u.id}','${esc(u.nome)}')">${ICON.key}</button>
+      </td>
     </tr>`).join('')}</tbody></table></div>`;
 };
+function modalEditarUsuario(u){
+  const cargos=S.cache.cargos||[];
+  const ehAdm = u.perfil==='admin';
+  modal({wide:true, title:`Editar · ${u.nome}`, body:`<form id="fEU">
+    <div class="field"><label>Nome completo</label><input name="nome" required value="${esc(u.nome)}"/></div>
+    <div class="form-row">
+      <div class="field"><label>E-mail</label><input name="email" type="email" value="${esc(u.email||'')}"/></div>
+      <div class="field"><label>Telefone</label><input name="telefone" value="${esc(u.telefone||'')}"/></div>
+    </div>
+    <div class="form-row">
+      <div class="field"><label>Login</label><input name="login" required value="${esc(u.login)}"/></div>
+      <div class="field"><label>Status</label><select name="ativo"><option value="true" ${String(u.ativo)!=='false'?'selected':''}>Ativo</option><option value="false" ${String(u.ativo)==='false'?'selected':''}>Inativo</option></select></div>
+    </div>
+    ${ehAdm?'<div class="hint">Este usuário é administrador. Ele pode ser atribuído a áreas como responsável pelo Organograma.</div>':`<div class="form-row">
+      <div class="field"><label>Cargo</label><select name="cargoId"><option value="">— sem cargo —</option>${cargos.map(c=>`<option value="${c.id}" ${c.id===u.cargoId?'selected':''}>${esc(c.nome)}</option>`).join('')}</select></div>
+      <div class="field"><label>Salário (R$)</label><input name="salario" type="number" step="0.01" min="0" value="${u.salario||''}"/></div>
+    </div>`}
+  </form>`, footer:`<button class="btn btn-ghost" onclick="closeModal()">Cancelar</button><button class="btn btn-primary" id="bEU">Salvar</button>`});
+  el('bEU').onclick=async()=>{ const f=el('fEU'); if(!f.reportValidity())return; const d=Object.fromEntries(new FormData(f)); const b=el('bEU');b.disabled=true;b.textContent='Salvando…';
+    try{
+      await api('atualizarUsuario',{id:u.id,nome:d.nome,email:d.email,telefone:d.telefone,login:d.login,ativo:d.ativo});
+      if(!ehAdm) await api('atribuirCargo',{colaboradorId:u.id,cargoId:d.cargoId,salario:d.salario});
+      toast('Usuário atualizado.','ok'); closeModal(); go('usuarios');
+    }catch(e){ toast(e.message,'err'); b.disabled=false; b.textContent='Salvar'; }
+  };
+}
 
 function modalResetSenha(id,nome){
   modal({ title:`Nova senha · ${nome}`,
@@ -1078,7 +1109,7 @@ async function modalNovaArea(paiId,paiNome){
   const areas=S.cache.areas||[];
   const ocupados=new Set(areas.map(a=>String(a.responsavelId)).filter(Boolean));
   let candidatos=[];
-  if(S.user.perfil==='admin'){ const {usuarios}=await api('listarUsuarios'); candidatos=usuarios.filter(u=>u.perfil!=='admin'&&String(u.ativo)!=='false'&&!ocupados.has(String(u.id))); }
+  if(S.user.perfil==='admin'){ const {usuarios}=await api('listarUsuarios'); candidatos=usuarios.filter(u=>String(u.ativo)!=='false'&&!ocupados.has(String(u.id))); }
   else { const {colaboradores}=await api('listarColaboradores'); candidatos=(colaboradores||[]).filter(c=>!ocupados.has(String(c.id))); }
   if(!candidatos.length){
     return modal({title: raiz?'Criar Empresa':'Nova subárea', body:`<div class="inline-note">${ICON.info}<span>${S.user.perfil==='admin'?'Crie primeiro um <b>usuário</b> na tela <b>Usuários</b> e depois volte para atribuí-lo como responsável.':'Cadastre primeiro uma <b>pessoa na sua equipe</b> (em Minha equipe) e depois torne-a responsável desta nova área.'}</span></div>`, footer:`<button class="btn btn-primary" onclick="closeModal()">Entendi</button>`});
