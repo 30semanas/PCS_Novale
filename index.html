@@ -308,6 +308,8 @@ fieldset legend{font-size:.76rem;font-weight:700;color:var(--cyan-bright);paddin
 .org-toggle:hover{background:rgba(72,198,247,.22)}
 .org-toggle svg{width:13px;height:13px;transition:transform .15s}
 .org-toggle.closed svg{transform:rotate(-90deg)}
+.org-people{cursor:pointer;font:inherit;display:inline-flex;align-items:center}
+.org-people:hover{filter:brightness(1.25)}
 </style>
 </head>
 <body>
@@ -1104,22 +1106,23 @@ function toggleOrg(id){ const s=S.cache.orgCollapsed||(S.cache.orgCollapsed=new 
 function expandAllOrg(){ S.cache.orgCollapsed=new Set(); renderOrg(); }
 function collapseAllOrg(){ const areas=S.cache.areas||[]; S.cache.orgCollapsed=new Set(areas.filter(a=>areas.some(x=>x.paiId===a.id)).map(a=>a.id)); renderOrg(); }
 function orgPodeGerir(a){ return S.user.perfil==='admin' || String(a.responsavelId)===String(S.user.id); }
+function orgPodeAddPessoa(a){ return orgPodeGerir(a) || orgCanTransfer(a); }
 function orgNode(a, areas){
   const filhos = areas.filter(x=>x.paiId===a.id);
   const gerir = orgPodeGerir(a);
   const transf = orgCanTransfer(a);
   const collapsed = !!(S.cache.orgCollapsed && S.cache.orgCollapsed.has(a.id));
+  const addp = orgPodeAddPessoa(a);
   const aj = JSON.stringify(a).replace(/'/g,"&#39;");
   return `<li>
     <div class="org-card"${a.descricao?` title="${esc(a.descricao)}"`:''}>
       <div class="org-card-h"><span class="org-name">${esc(a.nome)} ${a.paiId?'':'<span class="pill gold">Empresa</span>'}</span>${filhos.length?`<button class="org-toggle ${collapsed?'closed':''}" title="${collapsed?('Abrir '+filhos.length+' área(s) abaixo'):'Agrupar'}" onclick="toggleOrg('${a.id}')">${ICON.chevron}</button>`:''}</div>
       <div class="org-resp">${ICON.users} ${a.responsavelNome?esc(a.responsavelNome):'<span style="color:var(--red)">sem responsável</span>'}</div>
-      <div class="org-meta"><span class="pill cyan"><span class="dot"></span>${a.qtdMembros}</span>${(collapsed&&filhos.length)?`<span class="pill gold">+${filhos.length} área(s)</span>`:''}</div>
-      ${(gerir||transf)?`<div class="org-actions">
-        ${gerir?`<button class="btn btn-ghost btn-sm btn-icon" title="Nova subárea" onclick='modalNovaArea("${a.id}","${esc(a.nome)}")'>${ICON.plus}</button>
-        <button class="btn btn-ghost btn-sm btn-icon" title="Adicionar pessoa" onclick='modalAddPessoa("${a.id}","${esc(a.nome)}")'>${ICON.users}</button>
-        <button class="btn btn-ghost btn-sm btn-icon" title="Ver pessoas" onclick='verMembros("${a.id}","${esc(a.nome)}")'>${ICON.dash}</button>
-        <button class="btn btn-ghost btn-sm btn-icon" title="Editar" onclick='modalEditarArea(${aj})'>${ICON.edit}</button>`:''}
+      <div class="org-meta"><button class="pill cyan org-people" title="Ver pessoas da área" onclick='verMembros("${a.id}","${esc(a.nome)}")'><span class="dot"></span>${a.qtdMembros}</button>${(collapsed&&filhos.length)?`<span class="pill gold">+${filhos.length} área(s)</span>`:''}</div>
+      ${(gerir||transf||addp)?`<div class="org-actions">
+        ${gerir?`<button class="btn btn-ghost btn-sm btn-icon" title="Nova subárea" onclick='modalNovaArea("${a.id}","${esc(a.nome)}")'>${ICON.plus}</button>`:''}
+        ${addp?`<button class="btn btn-ghost btn-sm btn-icon" title="Adicionar pessoa" onclick='modalAddPessoa("${a.id}","${esc(a.nome)}")'>${ICON.users}</button>`:''}
+        ${gerir?`<button class="btn btn-ghost btn-sm btn-icon" title="Editar" onclick='modalEditarArea(${aj})'>${ICON.edit}</button>`:''}
         ${transf&&a.paiId?`<button class="btn btn-ghost btn-sm btn-icon" title="Transferir para outra área" onclick='modalMoverArea(${aj})'>${ICON.move}</button>`:''}
         ${gerir&&a.paiId?`<button class="btn btn-danger btn-sm btn-icon" title="Excluir" onclick="excluirArea('${a.id}','${esc(a.nome)}')">${ICON.trash}</button>`:''}
       </div>`:''}
@@ -1163,9 +1166,16 @@ async function modalNovaArea(paiId,paiNome){
       <select name="responsavelId" required>${candidatos.map(u=>`<option value="${u.id}">${esc(u.nome)} (@${esc(u.login)})</option>`).join('')}</select>
       <div class="hint">${raiz?'Será o topo do organograma.':'Passará a liderar esta área e responderá ao responsável de '+esc(paiNome)+'.'}</div>
     </div>
+    ${raiz?'':`<div class="field"><label>Quem avalia as pessoas desta área?</label>
+      <select name="avaliadoPor">
+        <option value="responsavel">O responsável designado da área</option>
+        <option value="superior">Eu mesmo (${esc(S.user.nome)}) — o responsável acima</option>
+      </select>
+      <div class="hint">Define quem faz a avaliação de desempenho dos membros desta área.</div>
+    </div>`}
   </form>`, footer:`<button class="btn btn-ghost" onclick="closeModal()">Cancelar</button><button class="btn btn-primary" id="bNA">Criar</button>`});
   el('bNA').onclick=async()=>{ const f=el('fNA'); if(!f.reportValidity())return; const d=Object.fromEntries(new FormData(f)); const b=el('bNA');b.disabled=true;
-    try{ await api('criarArea',{nome:d.nome,descricao:d.descricao,paiId:paiId,responsavelId:d.responsavelId}); toast('Área criada.','ok'); closeModal(); go('organograma'); }
+    try{ await api('criarArea',{nome:d.nome,descricao:d.descricao,paiId:paiId,responsavelId:d.responsavelId,avaliadoPor:d.avaliadoPor||'responsavel'}); toast('Área criada.','ok'); closeModal(); go('organograma'); }
     catch(e){ toast(e.message,'err'); b.disabled=false; } };
 }
 function modalEditarArea(a){
@@ -1210,14 +1220,14 @@ async function liberarPessoa(id,nome,voltar){
 }
 async function verMembros(areaId,areaNome){
   const areas=S.cache.areas||[]; const area=areas.find(a=>a.id===areaId)||{};
-  const podeGerir = S.user.perfil==='admin' || String(area.responsavelId||'')===String(S.user.id);
-  const {colaboradores}=await api('listarColaboradores');
-  const membros=(colaboradores||[]).filter(c=>c.areaId===areaId);
-  modal({wide:true,title:`Pessoas · ${areaNome}`, body: membros.length?`<table class="tbl"><tbody>${membros.map(c=>`<tr>
-    <td><div style="display:flex;align-items:center;gap:10px">${avatarHtml(c,32)}<div><b>${esc(c.nome)}</b><br><span class="page-sub mono">@${esc(c.login)}</span></div></div></td>
+  const podeGerir = orgPodeGerir(area) || orgCanTransfer(area);
+  const r=await api('membrosArea',{areaId}); const membros=r.membros||[];
+  const nota = (r.avaliadorNome && r.avaliadorNome!==r.responsavelNome) ? `<div class="hint" style="margin-bottom:12px">${ICON.info} Avaliação das pessoas desta área feita por <b>${esc(r.avaliadorNome)}</b>.</div>` : '';
+  modal({wide:true,title:`Pessoas · ${areaNome}`, body: nota+(membros.length?`<table class="tbl"><tbody>${membros.map(c=>`<tr>
+    <td><div style="display:flex;align-items:center;gap:10px">${avatarHtml(c,32)}<div><b>${esc(c.nome)}</b> ${c.ehResponsavel?'<span class="pill gold">Responsável</span>':''}<br><span class="page-sub mono">@${esc(c.login)}</span></div></div></td>
     <td>${c.cargoNome?`<span class="pill gold">${esc(c.cargoNome)}</span>`:'<span class="pill gray">sem cargo</span>'}</td>
-    <td class="row-actions"><button class="btn btn-ghost btn-sm" onclick="closeModal();abrirColaborador('${c.id}')">Ficha</button>${(podeGerir && String(area.responsavelId||'')!==String(c.id))?`<button class="btn btn-ghost btn-sm" onclick="liberarPessoa('${c.id}','${esc(c.nome)}',()=>{closeModal();verMembros('${areaId}','${esc(areaNome)}');})">Liberar</button>`:''}</td>
-  </tr>`).join('')}</tbody></table>`:`<div class="empty">${ICON.users}<p>Nenhuma pessoa nesta área ainda.</p></div>`});
+    <td class="row-actions">${podeGerir?`<button class="btn btn-ghost btn-sm" onclick="closeModal();abrirColaborador('${c.id}')">Ficha</button>`:''}${(podeGerir && !c.ehResponsavel)?`<button class="btn btn-ghost btn-sm" onclick="liberarPessoa('${c.id}','${esc(c.nome)}',()=>{closeModal();verMembros('${areaId}','${esc(areaNome)}');})">Liberar</button>`:''}</td>
+  </tr>`).join('')}</tbody></table>`:`<div class="empty">${ICON.users}<p>Nenhuma pessoa nesta área ainda.</p></div>`)});
 }
 
 /* ---------------- AVALIAÇÕES (gerente) ---------------- */
