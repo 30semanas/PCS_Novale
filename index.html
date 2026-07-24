@@ -623,13 +623,12 @@ function buildNav(){
     {id:'comunicados', label:'Comunicados', icon:'message'},
     {id:'aniversariantes', label:'Aniversariantes', icon:'cake'}
   ];
-  const cap=u.capacidades||{}; const nav=[{id:'dashboard', label:'Meu painel', icon:'dash'},{id:'organograma', label:'Organograma', icon:'building'},
-    {id:'comunicados', label:'Comunicados', icon:'message'},{id:'aniversariantes', label:'Aniversariantes', icon:'cake'}];
-  if(cap.gerencia) nav.push(
-    {id:'colaboradores', label:'Minha equipe', icon:'users'},
-    {id:'cargos', label:'Cargos', icon:'badge'},
-    {id:'avaliacoes', label:'Avaliações', icon:'chart'}
-  );
+  const cap=u.capacidades||{}; const nav=[{id:'dashboard', label:'Meu painel', icon:'dash'},{id:'organograma', label:'Organograma', icon:'building'}];
+  if(cap.verUsuarios) nav.push({id:'usuarios', label:'Usuários', icon:'users'});
+  nav.push({id:'comunicados', label:'Comunicados', icon:'message'},{id:'aniversariantes', label:'Aniversariantes', icon:'cake'});
+  if(cap.gerencia) nav.push({id:'colaboradores', label:'Minha equipe', icon:'users'});
+  if(cap.gestao) nav.push({id:'cargos', label:'Cargos', icon:'badge'});
+  if(cap.gerencia) nav.push({id:'avaliacoes', label:'Avaliações', icon:'chart'});
   // Estas três são sempre exibidas para qualquer pessoa (não-admin): mesmo quem
   // ainda não está em uma área precisa ver o próprio cargo, feedbacks e avaliações.
   nav.push(
@@ -864,7 +863,7 @@ VIEWS.usuarios = async function(){
     <tbody id="buscaUsuarios_tb">${usuarios.map(u=>`<tr>
       <td><b>${esc(u.nome)}</b><br><span class="page-sub">${esc(u.email||'')}</span></td>
       <td class="mono">${esc(u.login)}</td>
-      <td><span class="pill ${u.perfil==='admin'?'gold':'cyan'}">${esc(u.papel||ROLE_LABEL[u.perfil]||"Usuário")}</span></td>
+      <td><span class="pill ${u.perfil==='admin'?'gold':'cyan'}">${esc(u.papel||ROLE_LABEL[u.perfil]||"Usuário")}</span>${(u.nivel==='gerente')?' <span class="pill gold" style="font-size:.62rem">gerente</span>':''}</td>
       <td>${u.cargoNome?`<span class="pill gold">${esc(u.cargoNome)}</span>`:'<span class="pill gray">—</span>'}</td>
       <td>${String(u.ativo)!=='false'?'<span class="pill green"><span class="dot"></span>Ativo</span>':'<span class="pill red"><span class="dot"></span>Inativo</span>'}</td>
       <td class="row-actions">
@@ -888,6 +887,14 @@ function modalEditarUsuario(u){
       <div class="field"><label>Login</label><input name="login" required value="${esc(u.login)}"/></div>
       <div class="field"><label>Status</label><select name="ativo"><option value="true" ${String(u.ativo)!=='false'?'selected':''}>Ativo</option><option value="false" ${String(u.ativo)==='false'?'selected':''}>Inativo</option></select></div>
     </div>
+    <div class="field"><label>Nível de acesso</label>
+      <select name="perfil">
+        <option value="colaborador" ${(u.nivel||u.perfil)==='colaborador'?'selected':''}>Colaborador — acesso básico</option>
+        <option value="gerente" ${(u.nivel||u.perfil)==='gerente'?'selected':''}>Gerente — vê cargos e usuários, cria comunicados</option>
+        <option value="admin" ${(u.nivel||u.perfil)==='admin'?'selected':''}>Administrador — acesso total</option>
+      </select>
+      <div class="hint">Gerente e líderes de área também têm poderes de gestão (as regras somam).</div>
+    </div>
     ${ehAdm?'<div class="hint">Este usuário é administrador. Ele pode ser atribuído a áreas como responsável pelo Organograma.</div>':`<div class="form-row">
       <div class="field"><label>Cargo</label><select name="cargoId"><option value="">— sem cargo —</option>${cargos.map(c=>`<option value="${c.id}" ${c.id===u.cargoId?'selected':''}>${esc(c.nome)}</option>`).join('')}</select></div>
       <div class="field"><label>Salário (R$)</label><input name="salario" type="number" step="0.01" min="0" value="${u.salario||''}"/></div>
@@ -903,7 +910,7 @@ function modalEditarUsuario(u){
   </form>`, footer:`<button class="btn btn-ghost" onclick="closeModal()">Cancelar</button><button class="btn btn-primary" id="bEU">Salvar</button>`});
   el('bEU').onclick=async()=>{ const f=el('fEU'); if(!f.reportValidity())return; const d=Object.fromEntries(new FormData(f)); const b=el('bEU');b.disabled=true;b.textContent='Salvando…';
     try{
-      await api('atualizarUsuario',{id:u.id,nome:d.nome,email:d.email,telefone:d.telefone,login:d.login,ativo:d.ativo,
+      await api('atualizarUsuario',{id:u.id,nome:d.nome,email:d.email,telefone:d.telefone,login:d.login,ativo:d.ativo,perfil:d.perfil,
         dataNascimento:d.dataNascimento,dataAdmissao:d.dataAdmissao,dataDemissao:d.dataDemissao});
       if(!ehAdm) await api('atribuirCargo',{colaboradorId:u.id,cargoId:d.cargoId,salario:d.salario});
       toast('Usuário atualizado.','ok'); closeModal(); go('usuarios');
@@ -1008,6 +1015,13 @@ async function modalNovoUsuarioAdmin(){
       <div class="field"><label>Data de admissão</label><input name="dataAdmissao" type="date"/></div>
     </div>
     <div class="field"><label>Salário (opcional, R$)</label><input name="salario" type="number" step="0.01" min="0"/><div class="hint">Visível apenas para o superior imediato.</div></div>
+    <div class="field"><label>Nível de acesso</label>
+      <select name="perfil">
+        <option value="colaborador" selected>Colaborador — acesso básico</option>
+        <option value="gerente">Gerente — vê cargos e usuários, cria comunicados</option>
+        <option value="admin">Administrador — acesso total</option>
+      </select>
+    </div>
     <div class="hint">Deixe sem área para criar o usuário no "pool" e depois atribuí-lo como responsável de uma área no Organograma.</div>
   </form>`, footer:`<button class="btn btn-ghost" onclick="closeModal()">Cancelar</button><button class="btn btn-primary" id="bNU">Criar usuário</button>`});
   el('bNU').onclick=async()=>{ const f=el('fNU'); if(!f.reportValidity())return; const d=Object.fromEntries(new FormData(f)); const b=el('bNU');b.disabled=true;
@@ -1035,17 +1049,21 @@ async function excluirArea(id,nome){ confirmar(`Remover a área "${nome}"?`, asy
 
 /* ---------------- GERENTE · CARGOS ---------------- */
 VIEWS.cargos = async function(){
-  setHead('Cargos','Definição dos cargos e do avanço de função. O salário de cada pessoa é definido pelo superior imediato.', `<button class="btn btn-primary" onclick="modalCargo()">${ICON.plus}<span>Novo cargo</span></button>`);
+  const ehAdm = S.user.perfil==='admin';
+  setHead('Cargos', ehAdm?'Você cria os cargos e define quais gerentes podem editar cada um.':'Cargos da empresa. Você edita apenas os que foram liberados para você.',
+    ehAdm?`<button class="btn btn-primary" onclick="modalCargo()">${ICON.plus}<span>Novo cargo</span></button>`:'');
   const {cargos} = await api('listarCargos');
   S.cache.cargos = cargos;
-  if(!cargos.length) return el('content').innerHTML = emptyState('Nenhum cargo cadastrado','Cadastre os cargos com objetivo, competências e % de avanço de função.','Novo cargo','modalCargo()');
+  if(!cargos.length) return el('content').innerHTML = ehAdm
+    ? emptyState('Nenhum cargo cadastrado','Cadastre os cargos com objetivo, competências e % de avanço de função.','Novo cargo','modalCargo()')
+    : `<div class="empty">${ICON.badge}<p>Nenhum cargo cadastrado ainda.</p></div>`;
   el('content').innerHTML = `<div class="grid cols-2">${cargos.map(c=>{
     const comps = String(c.competencias||'').split(/[,;\n]/).map(x=>x.trim()).filter(Boolean);
     return `<div class="card">
       <div class="card-h"><h3>${esc(c.nome)}</h3>
         <div class="row-actions">
-          <button class="btn btn-ghost btn-sm btn-icon" onclick='modalCargo(${JSON.stringify(c).replace(/'/g,"&#39;")})'>${ICON.edit}</button>
-          <button class="btn btn-danger btn-sm btn-icon" onclick="excluirCargo('${c.id}','${esc(c.nome)}')">${ICON.trash}</button>
+          ${c.podeEditar?`<button class="btn btn-ghost btn-sm btn-icon" title="Editar" onclick='modalCargo(${JSON.stringify(c).replace(/'/g,"&#39;")})'>${ICON.edit}</button>`:''}
+          ${ehAdm?`<button class="btn btn-danger btn-sm btn-icon" title="Excluir" onclick="excluirCargo('${c.id}','${esc(c.nome)}')">${ICON.trash}</button>`:''}
         </div></div>
       <div class="kv">
         ${c.objetivo?`<div><div class="k">Objetivo</div><div class="v">${esc(c.objetivo)}</div></div>`:''}
@@ -1059,8 +1077,12 @@ VIEWS.cargos = async function(){
       </div>
     </div>`;}).join('')}</div>`;
 };
-function modalCargo(c){
+async function modalCargo(c){
   const editing=!!c;
+  const ehAdm = S.user.perfil==='admin';
+  let usuarios=[];
+  if(ehAdm){ try{ usuarios = ordNome((await api('listarUsuarios')).usuarios.filter(u=>u.perfil!=='admin')); }catch(e){ usuarios=[]; } }
+  const liberados = new Set((editing && c.editores ? c.editores : []).map(String));
   modal({wide:true, title: editing?'Editar cargo':'Novo cargo', body:`<form id="fC">
     <div class="field"><label>Nome do cargo</label><input name="nome" required value="${editing?esc(c.nome):''}"/></div>
     <div class="field"><label>Objetivo</label><textarea name="objetivo" placeholder="Ex.: Colaborador em desenvolvimento, responsável por executar as atividades da célula seguindo os processos estabelecidos.">${editing?esc(c.objetivo):''}</textarea></div>
@@ -1068,9 +1090,22 @@ function modalCargo(c){
     <div class="field"><label>Critérios para promoção</label><textarea name="criteriosPromocao" placeholder="• Mínimo de 6 meses no nível.&#10;• Domínio das atividades da função.&#10;• Indicadores dentro da meta.">${editing?esc(c.criteriosPromocao):''}</textarea></div>
     <div class="field"><label>Competências</label><input name="competencias" value="${editing?esc(c.competencias):''}" placeholder="Organização, comprometimento, aprendizado, disciplina, qualidade, produtividade"/><div class="hint">Separe por vírgula. Estas competências viram os eixos do gráfico de teia na avaliação.</div></div>
     <div class="field"><label>% de avanço de função</label><input name="percentualAvanco" type="number" step="0.5" min="0" value="${editing?c.percentualAvanco:''}"/><div class="hint">Percentual de aumento ao avançar de função. O salário de cada pessoa é definido pelo superior imediato.</div></div>
+    ${ehAdm?`<div class="field"><label>Quem pode editar e atribuir este cargo</label>
+      ${usuarios.length?`<input class="pick-search" id="cEd_q" placeholder="Buscar pessoa…" autocomplete="off" oninput="pickFiltrar('cEd')"/>
+      <div class="pick-list" id="cEd">${usuarios.map(u=>`
+        <label class="pick-item" data-busca="${esc(semAcento(u.nome+' '+(u.login||'')))}">
+          <input type="checkbox" value="${u.id}" ${liberados.has(String(u.id))?'checked':''} onchange="pickContar('cEd','pessoa','pessoas')"/>
+          <span style="min-width:0"><b>${esc(u.nome)}</b> ${u.nivel==='gerente'?'<span class="pill gold" style="font-size:.62rem">gerente</span>':''}<br><span class="page-sub mono" style="font-size:.72rem">@${esc(u.login)}</span></span>
+        </label>`).join('')}
+        <div class="pick-empty page-sub" id="cEd_none" style="display:none">Ninguém encontrado.</div></div>
+      <div class="pick-count" id="cEd_c">Nenhuma pessoa marcada</div>
+      <div class="hint">Só o admin sempre pode editar. As pessoas marcadas aqui (normalmente gerentes) poderão editar os campos e atribuir este cargo.</div>`
+      :`<div class="hint">Cadastre usuários para poder liberar a edição deste cargo.</div>`}
+    </div>`:''}
   </form>`,
   footer:`<button class="btn btn-ghost" onclick="closeModal()">Cancelar</button><button class="btn btn-primary" id="bC">${editing?'Salvar cargo':'Criar cargo'}</button>`});
   el('bC').onclick=async()=>{ const f=el('fC'); if(!f.reportValidity())return; const d=Object.fromEntries(new FormData(f)); const b=el('bC');b.disabled=true;b.textContent='Salvando…';
+    if(ehAdm) d.editores = pickSelecionados('cEd');
     try{ if(editing) await api('atualizarCargo',Object.assign({id:c.id},d)); else await api('criarCargo',d); toast('Cargo salvo.','ok'); closeModal(); go('cargos'); }
     catch(e){ toast(e.message,'err'); b.disabled=false; b.textContent=editing?'Salvar cargo':'Criar cargo'; } };
 }
@@ -1501,7 +1536,7 @@ async function verArea(id){
       linha('Área', `<b>${esc(a.nome)}</b> ${a.paiId?'':'<span class="pill gold">Empresa</span>'}`)
     + (a.descricao?linha('Descrição', esc(a.descricao)):'')
     + linha('Responsável', a.responsavelNome?esc(a.responsavelNome):'<span style="color:var(--red)">sem responsável</span>')
-    + (r.avaliadorNome && r.avaliadorNome!==r.responsavelNome ? linha('Quem avalia', esc(r.avaliadorNome)+' <span class="page-sub">(responsável acima)</span>') : '')
+    + ((r.avaliadorNome||a.avaliadorNome) && (r.avaliadorNome||a.avaliadorNome)!==(a.responsavelNome||'') ? linha('Quem avalia', esc(r.avaliadorNome||a.avaliadorNome)+' <span class="page-sub">(responsável acima)</span>') : '')
     + linha('Responde a', pai?esc(pai.nome):'<span class="page-sub">nível mais alto da empresa</span>')
     + linha('Áreas abaixo', filhos.length?filhos.map(f=>`<span class="pill cyan" style="margin:0 5px 5px 0;display:inline-block">${esc(f.nome)}</span>`).join(''):'<span class="page-sub">nenhuma</span>')
     + linha('Pessoas ('+membros.length+')', listaPessoas)
@@ -1669,8 +1704,8 @@ VIEWS['minhas-avaliacoes'] = async function(){
 };
 VIEWS['meu-cargo'] = async function(){
   setHead('Meu cargo','Descrição da sua função (sem informações salariais)');
-  const {cargos}=await api('listarCargos');
-  const c = cargos.find(x=>x.id===S.user.cargoId);
+  const {cargo}=await api('meuCargo');
+  const c = cargo;
   if(!c) return el('content').innerHTML = emptyState('Cargo não definido','Seu gestor ainda não atribuiu um cargo ao seu perfil.','','');
   const comps=String(c.competencias||'').split(/[,;\n]/).map(x=>x.trim()).filter(Boolean);
   el('content').innerHTML = `<div class="card" style="max-width:720px">
