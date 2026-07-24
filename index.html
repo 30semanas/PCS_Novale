@@ -827,9 +827,10 @@ VIEWS.usuarios = async function(){
   setHead('Usuários','Edite contas, atribua cargo e salário. Crie usuários aqui para depois vinculá-los a áreas.', `<button class="btn btn-primary" onclick="modalNovoUsuarioAdmin()">${ICON.plus}<span>Novo usuário</span></button>`);
   const [{usuarios},{cargos}] = await Promise.all([ api('listarUsuarios'), api('listarCargos') ]);
   S.cache.usuarios = usuarios; S.cache.cargos = cargos;
-  el('content').innerHTML = `<div class="card"><table class="tbl">
+  el('content').innerHTML = `${barraBusca('buscaUsuarios','Buscar por nome, login, e-mail, área ou cargo…')}
+  <div class="card"><table class="tbl">
     <thead><tr><th>Nome</th><th>Login</th><th>Papel / Área</th><th>Cargo</th><th>Status</th><th></th></tr></thead>
-    <tbody>${usuarios.map(u=>`<tr>
+    <tbody id="buscaUsuarios_tb">${usuarios.map(u=>`<tr>
       <td><b>${esc(u.nome)}</b><br><span class="page-sub">${esc(u.email||'')}</span></td>
       <td class="mono">${esc(u.login)}</td>
       <td><span class="pill ${u.perfil==='admin'?'gold':'cyan'}">${esc(u.papel||ROLE_LABEL[u.perfil]||"Usuário")}</span></td>
@@ -839,7 +840,9 @@ VIEWS.usuarios = async function(){
         <button class="btn btn-ghost btn-sm" onclick='modalEditarUsuario(${JSON.stringify(u).replace(/'/g,"&#39;")})'>${ICON.edit}<span>Editar</span></button>
         <button class="btn btn-ghost btn-sm btn-icon" title="Redefinir senha" onclick="modalResetSenha('${u.id}','${esc(u.nome)}')">${ICON.key}</button>
       </td>
-    </tr>`).join('')}</tbody></table></div>`;
+    </tr>`).join('')}</tbody></table>
+    <div id="buscaUsuarios_vazio" class="empty" style="display:none">${ICON.users}<p>Nenhum usuário encontrado com esse termo.</p></div>
+  </div>`;
 };
 function modalEditarUsuario(u){
   const cargos=S.cache.cargos||[];
@@ -1037,9 +1040,10 @@ VIEWS.colaboradores = async function(){
   S.cache.areasLidero = ordNome(areas.filter(a=>String(a.responsavelId||'')===String(S.user.id)));
   const idsLidero = new Set(S.cache.areasLidero.map(a=>a.id));
   if(!colaboradores.length) return el('content').innerHTML = emptyState('Sua equipe está vazia','Adicione pessoas disponíveis ou crie novas nas áreas que você lidera.','Adicionar disponível','modalAtribuirDisponivel()');
-  el('content').innerHTML = `<div class="card"><table class="tbl">
+  el('content').innerHTML = `${barraBusca('buscaEquipe','Buscar pelo nome…')}
+  <div class="card"><table class="tbl">
     <thead><tr><th>Colaborador</th><th>Área</th><th>Cargo</th><th></th></tr></thead>
-    <tbody>${colaboradores.map(c=>`<tr>
+    <tbody id="buscaEquipe_tb">${colaboradores.map(c=>`<tr>
       <td><div style="display:flex;align-items:center;gap:11px;cursor:pointer" onclick="abrirColaborador('${c.id}')" title="Ver ficha completa">${avatarHtml(c,34)}<div><b>${esc(c.nome)}</b><br><span class="page-sub mono">@${esc(c.login)}</span></div></div></td>
       <td>${c.areaNome?`<span class="pill cyan">${esc(c.areaNome)}</span>`:'<span class="pill gray">sem área</span>'}</td>
       <td>${c.cargoNome?`<span class="pill gold">${esc(c.cargoNome)}</span>`:'<span class="pill gray">sem cargo</span>'}</td>
@@ -1048,8 +1052,10 @@ VIEWS.colaboradores = async function(){
         <button class="btn btn-ghost btn-sm btn-icon" title="Feedbacks" onclick="abrirFeedbacks('${c.id}','${esc(c.nome)}')">${ICON.message}</button>
         <button class="btn btn-ghost btn-sm btn-icon" title="Nova avaliação" onclick="iniciarAvaliacao('${c.id}','${esc(c.nome)}')">${ICON.chart}</button>
         <button class="btn btn-ghost btn-sm btn-icon" title="Senha" onclick="modalResetSenha('${c.id}','${esc(c.nome)}')">${ICON.key}</button>
-        ${idsLidero.has(c.areaId)?`<button class="btn btn-ghost btn-sm" title="Liberar da equipe" onclick="liberarPessoa('${c.id}','${esc(c.nome)}',()=>go('colaboradores'))">Liberar</button>`:''}
-      </td></tr>`).join('')}</tbody></table></div>`;
+        ${idsLidero.has(c.areaId)?`<button class="btn btn-ghost btn-sm" title="Tirar da área e deixar disponível" onclick="liberarPessoa('${c.id}','${esc(c.nome)}',()=>go('colaboradores'))">Remover da área</button>`:''}
+      </td></tr>`).join('')}</tbody></table>
+    <div id="buscaEquipe_vazio" class="empty" style="display:none">${ICON.users}<p>Ninguém encontrado com esse termo.</p></div>
+  </div>`;
 };
 async function modalAtribuirDisponivel(){
   const areas=(S.cache.areas||[]); const areasLidero=(S.cache.areasLidero||[]).length?S.cache.areasLidero:areas.filter(a=>String(a.responsavelId||'')===String(S.user.id));
@@ -1250,6 +1256,20 @@ function pickSelecionados(id){
   return [...box.querySelectorAll('input:checked')].map(i=>i.value);
 }
 
+/* busca instantânea em tabelas: filtra as linhas conforme se digita */
+function barraBusca(id, placeholder){
+  return `<div style="margin-bottom:12px"><input class="pick-search" id="${id}" placeholder="${esc(placeholder)}" autocomplete="off" oninput="filtrarTabela('${id}')"/></div>`;
+}
+function filtrarTabela(id){
+  const campo=el(id), corpo=el(id+'_tb'); if(!campo||!corpo) return;
+  const q=semAcento(campo.value); let vis=0;
+  [...corpo.querySelectorAll('tr')].forEach(tr=>{
+    const bate = !q || semAcento(tr.textContent).indexOf(q)>=0;
+    tr.style.display = bate ? '' : 'none'; if(bate) vis++;
+  });
+  const vazio=el(id+'_vazio'); if(vazio) vazio.style.display = vis ? 'none' : 'block';
+}
+
 /* lista de seleção ÚNICA com busca (para escolher o responsável) */
 function pickOne(id, pessoas, selecionadoId){
   pessoas = ordNome(pessoas);
@@ -1279,10 +1299,14 @@ async function verArea(id){
     <div style="min-width:140px;color:var(--muted2);font-size:.74rem;font-weight:700;text-transform:uppercase;letter-spacing:.04em;padding-top:2px">${k}</div>
     <div style="flex:1;min-width:0">${v}</div></div>`;
   const membros=r.membros||[];
+  const podeGerir = gerir || transf;
   const listaPessoas = membros.length
     ? `<div style="display:flex;flex-direction:column;gap:7px">${membros.map(c=>`<div style="display:flex;align-items:center;gap:9px">
-        ${avatarHtml(c,28)}<div style="min-width:0"><b>${esc(c.nome)}</b> ${c.ehResponsavel?'<span class="pill gold">Responsável</span>':''}
-        <br><span class="page-sub mono" style="font-size:.74rem">@${esc(c.login)}${c.cargoNome?' · '+esc(c.cargoNome):''}</span></div></div>`).join('')}</div>`
+        ${avatarHtml(c,28)}<div style="min-width:0;flex:1"><b>${esc(c.nome)}</b> ${c.ehResponsavel?'<span class="pill gold">Responsável</span>':''}
+        <br><span class="page-sub mono" style="font-size:.74rem">@${esc(c.login)}${c.cargoNome?' · '+esc(c.cargoNome):''}</span></div>
+        ${(podeGerir && !c.ehResponsavel)?`<button class="btn btn-ghost btn-sm" title="Tirar desta área e deixar disponível" onclick="liberarPessoa('${c.id}','${esc(c.nome)}',()=>{closeModal();verArea('${a.id}');})">Remover da área</button>`:''}
+        </div>`).join('')}</div>
+        ${podeGerir?'<div class="hint" style="margin-top:8px">Ao remover, a pessoa volta para o banco de disponíveis e pode ser adicionada a outra área.</div>':''}`
     : '<span class="page-sub">Nenhuma pessoa nesta área ainda.</span>';
   const acoes = [];
   if(gerir) acoes.push(`<button class="btn btn-ghost btn-sm" onclick='closeModal();modalNovaArea("${a.id}","${esc(a.nome)}")'>${ICON.plus}<span>Subárea</span></button>`);
@@ -1409,8 +1433,8 @@ async function modalAddPessoa(areaId,areaNome){
     }catch(e){ toast(e.message,'err'); b.disabled=false; b.textContent='Adicionar'; } };
 }
 async function liberarPessoa(id,nome,voltar){
-  confirmar(`Liberar "${nome}" da equipe? A pessoa fica disponível para ser atribuída a outra área.`, async()=>{
-    try{ await api('liberarMembro',{colaboradorId:id}); toast('Pessoa liberada.','ok'); if(voltar) voltar(); }catch(e){ toast(e.message,'err'); }
+  confirmar(`Remover "${nome}" desta área? A pessoa deixa de responder a você e volta para o banco de disponíveis, podendo ser adicionada a outra área.`, async()=>{
+    try{ await api('liberarMembro',{colaboradorId:id}); toast('Pessoa removida da área e disponível para outra.','ok'); if(voltar) voltar(); }catch(e){ toast(e.message,'err'); }
   });
 }
 async function verMembros(areaId,areaNome){
@@ -1421,7 +1445,7 @@ async function verMembros(areaId,areaNome){
   modal({wide:true,title:`Pessoas · ${areaNome}`, body: nota+(membros.length?`<table class="tbl"><tbody>${membros.map(c=>`<tr>
     <td><div style="display:flex;align-items:center;gap:10px">${avatarHtml(c,32)}<div><b>${esc(c.nome)}</b> ${c.ehResponsavel?'<span class="pill gold">Responsável</span>':''}<br><span class="page-sub mono">@${esc(c.login)}</span></div></div></td>
     <td>${c.cargoNome?`<span class="pill gold">${esc(c.cargoNome)}</span>`:'<span class="pill gray">sem cargo</span>'}</td>
-    <td class="row-actions">${podeGerir?`<button class="btn btn-ghost btn-sm" onclick="closeModal();abrirColaborador('${c.id}')">Ficha</button>`:''}${(podeGerir && !c.ehResponsavel)?`<button class="btn btn-ghost btn-sm" onclick="liberarPessoa('${c.id}','${esc(c.nome)}',()=>{closeModal();verMembros('${areaId}','${esc(areaNome)}');})">Liberar</button>`:''}</td>
+    <td class="row-actions">${podeGerir?`<button class="btn btn-ghost btn-sm" onclick="closeModal();abrirColaborador('${c.id}')">Ficha</button>`:''}${(podeGerir && !c.ehResponsavel)?`<button class="btn btn-ghost btn-sm" onclick="liberarPessoa('${c.id}','${esc(c.nome)}',()=>{closeModal();verMembros('${areaId}','${esc(areaNome)}');})">Remover da área</button>`:''}</td>
   </tr>`).join('')}</tbody></table>`:`<div class="empty">${ICON.users}<p>Nenhuma pessoa nesta área ainda.</p></div>`)});
 }
 
