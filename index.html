@@ -317,6 +317,31 @@ fieldset legend{font-size:.76rem;font-weight:700;color:var(--cyan-bright);paddin
 .org-people{cursor:pointer;font:inherit;display:inline-flex;align-items:center}
 .org-people:hover{filter:brightness(1.25)}
 .pick-search{width:100%;margin-bottom:8px}
+/* ---- aniversariante do dia: confetes e fogos ---- */
+.bday-card{position:relative;overflow:hidden;border-radius:18px;padding:26px 22px;text-align:center;
+  background:linear-gradient(150deg,rgba(44,166,224,.20),rgba(232,181,74,.16));border:1px solid rgba(232,181,74,.42)}
+.bday-card .conteudo{position:relative;z-index:3}
+.bday-nome{font-family:var(--f-disp);font-size:1.5rem;font-weight:700;margin:12px 0 3px}
+.bday-sub{color:var(--muted);font-size:.9rem}
+.bday-parabens{display:inline-block;margin-bottom:6px;font-family:var(--f-disp);font-weight:700;letter-spacing:.08em;
+  text-transform:uppercase;font-size:.78rem;color:var(--gold)}
+.bday-foto{width:96px;height:96px;border-radius:50%;margin:0 auto;overflow:hidden;border:3px solid rgba(232,181,74,.6);
+  display:grid;place-items:center;background:linear-gradient(135deg,var(--cyan),var(--cyan-deep));color:#06121D;
+  font-family:var(--f-disp);font-weight:700;font-size:2rem}
+.bday-foto img{width:100%;height:100%;object-fit:cover}
+.confete{position:absolute;top:-14px;width:9px;height:14px;opacity:0;border-radius:2px;z-index:1;
+  animation:cai linear infinite}
+@keyframes cai{
+  0%{transform:translateY(-20px) rotate(0deg);opacity:0}
+  8%{opacity:1}
+  100%{transform:translateY(420px) rotate(720deg);opacity:0}}
+.fogo{position:absolute;width:6px;height:6px;border-radius:50%;z-index:2;opacity:0;animation:estoura ease-out infinite}
+@keyframes estoura{
+  0%{transform:translate(0,0) scale(.4);opacity:0}
+  12%{opacity:1}
+  70%{opacity:.85}
+  100%{transform:translate(var(--dx),var(--dy)) scale(.2);opacity:0}}
+@media (prefers-reduced-motion: reduce){ .confete,.fogo{display:none} }
 .pick-count{margin-top:7px;font-size:.78rem;color:var(--muted2)}
 .pick-list{max-height:260px;overflow:auto;border:1px solid var(--border-soft);border-radius:11px;padding:6px}
 .pick-item{display:flex;align-items:center;gap:10px;padding:8px 9px;border-radius:9px;cursor:pointer}
@@ -425,6 +450,7 @@ const ICON = {
   logout:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="m16 17 5-5-5-5M21 12H9"/></svg>',
   plus:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>',
   move:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M5 9l-3 3 3 3M9 5l3-3 3 3M15 19l-3 3-3-3M19 9l3 3-3 3M2 12h20M12 2v20"/></svg>',
+  cake:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M4 21h16M4 21v-6a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v6M6 13V9a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v4M12 7V4M9 5.5c0-1 1.5-1.5 1.5-1.5M15 5.5c0-1-1.5-1.5-1.5-1.5"/></svg>',
   chevron:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6"><path d="M6 9l6 6 6-6"/></svg>',
   edit:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.12 2.12 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5Z"/></svg>',
   trash:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2m3 0v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/></svg>',
@@ -593,9 +619,12 @@ function buildNav(){
     {id:'dashboard', label:'Painel', icon:'dash'},
     {id:'organograma', label:'Organograma', icon:'building'},
     {id:'cargos', label:'Cargos', icon:'badge'},
-    {id:'usuarios', label:'Usuários', icon:'users'}
+    {id:'usuarios', label:'Usuários', icon:'users'},
+    {id:'comunicados', label:'Comunicados', icon:'message'},
+    {id:'aniversariantes', label:'Aniversariantes', icon:'cake'}
   ];
-  const cap=u.capacidades||{}; const nav=[{id:'dashboard', label:'Meu painel', icon:'dash'},{id:'organograma', label:'Organograma', icon:'building'}];
+  const cap=u.capacidades||{}; const nav=[{id:'dashboard', label:'Meu painel', icon:'dash'},{id:'organograma', label:'Organograma', icon:'building'},
+    {id:'comunicados', label:'Comunicados', icon:'message'},{id:'aniversariantes', label:'Aniversariantes', icon:'cake'}];
   if(cap.gerencia) nav.push(
     {id:'colaboradores', label:'Minha equipe', icon:'users'},
     {id:'cargos', label:'Cargos', icon:'badge'},
@@ -861,10 +890,19 @@ function modalEditarUsuario(u){
       <div class="field"><label>Cargo</label><select name="cargoId"><option value="">— sem cargo —</option>${cargos.map(c=>`<option value="${c.id}" ${c.id===u.cargoId?'selected':''}>${esc(c.nome)}</option>`).join('')}</select></div>
       <div class="field"><label>Salário (R$)</label><input name="salario" type="number" step="0.01" min="0" value="${u.salario||''}"/></div>
     </div>`}
+    <fieldset style="margin-top:14px"><legend>Datas</legend>
+      <div class="form-row">
+        <div class="field"><label>Nascimento</label><input name="dataNascimento" type="date" value="${esc((u.dataNascimento||'').slice(0,10))}"/></div>
+        <div class="field"><label>Admissão</label><input name="dataAdmissao" type="date" value="${esc((u.dataAdmissao||'').slice(0,10))}"/></div>
+      </div>
+      <div class="field"><label>Demissão</label><input name="dataDemissao" type="date" value="${esc((u.dataDemissao||'').slice(0,10))}"/>
+        <div class="hint">Ao preencher, a conta é desativada e a pessoa sai dos aniversariantes. Apagar a data reativa.</div></div>
+    </fieldset>
   </form>`, footer:`<button class="btn btn-ghost" onclick="closeModal()">Cancelar</button><button class="btn btn-primary" id="bEU">Salvar</button>`});
   el('bEU').onclick=async()=>{ const f=el('fEU'); if(!f.reportValidity())return; const d=Object.fromEntries(new FormData(f)); const b=el('bEU');b.disabled=true;b.textContent='Salvando…';
     try{
-      await api('atualizarUsuario',{id:u.id,nome:d.nome,email:d.email,telefone:d.telefone,login:d.login,ativo:d.ativo});
+      await api('atualizarUsuario',{id:u.id,nome:d.nome,email:d.email,telefone:d.telefone,login:d.login,ativo:d.ativo,
+        dataNascimento:d.dataNascimento,dataAdmissao:d.dataAdmissao,dataDemissao:d.dataDemissao});
       if(!ehAdm) await api('atribuirCargo',{colaboradorId:u.id,cargoId:d.cargoId,salario:d.salario});
       toast('Usuário atualizado.','ok'); closeModal(); go('usuarios');
     }catch(e){ toast(e.message,'err'); b.disabled=false; b.textContent='Salvar'; }
@@ -962,6 +1000,10 @@ async function modalNovoUsuarioAdmin(){
     <div class="form-row">
       <div class="field"><label>Área (opcional)</label><select name="areaId"><option value="">— sem área (atribuir depois) —</option>${areas.map(a=>`<option value="${a.id}">${esc(a.nome)}</option>`).join('')}</select></div>
       <div class="field"><label>Cargo (opcional)</label><select name="cargoId"><option value="">— sem cargo —</option>${cargos.map(c=>`<option value="${c.id}">${esc(c.nome)}</option>`).join('')}</select></div>
+    </div>
+    <div class="form-row">
+      <div class="field"><label>Data de nascimento</label><input name="dataNascimento" type="date"/><div class="hint">Usada na tela de aniversariantes.</div></div>
+      <div class="field"><label>Data de admissão</label><input name="dataAdmissao" type="date"/></div>
     </div>
     <div class="field"><label>Salário (opcional, R$)</label><input name="salario" type="number" step="0.01" min="0"/><div class="hint">Visível apenas para o superior imediato.</div></div>
     <div class="hint">Deixe sem área para criar o usuário no "pool" e depois atribuí-lo como responsável de uma área no Organograma.</div>
@@ -1095,6 +1137,8 @@ async function abrirColaborador(id){
       ['E-mail', c.email||'—'], ['Telefone', c.telefone||'—'], ['Login', '@'+c.login],
       ['Matrícula', c.matricula||'—'], ['Admissão', fmtDay(c.dataAdmissao)],
       ['Área', c.areaNome||'—'], ['Cargo', c.cargoNome||'—'],
+      c.dataNascimento?['Nascimento', fmtDay(c.dataNascimento)]:null,
+      c.dataDemissao?['Demissão', fmtDay(c.dataDemissao)]:null,
       c.salario?['Salário', money(c.salario)]:null
     ].filter(Boolean);
     const avalRows = avals.length ? avals.map(a=>`
@@ -1138,6 +1182,10 @@ function modalColaborador(){
       <div class="field"><label>Login</label><input name="login" required/></div>
       <div class="field"><label>Matrícula</label><input name="matricula"/></div>
     </div>
+    <div class="form-row">
+      <div class="field"><label>Data de nascimento</label><input name="dataNascimento" type="date"/></div>
+      <div class="field"><label>Data de admissão</label><input name="dataAdmissao" type="date"/></div>
+    </div>
     <div class="form-row"><div class="field"><label>Senha de acesso</label>${pwd('senha')}</div><div class="field"><label>Salário (R$)</label><input name="salario" type="number" step="0.01" min="0"/><div class="hint">Só o superior imediato vê e define.</div></div></div>
   </form>`, footer:`<button class="btn btn-ghost" onclick="closeModal()">Cancelar</button><button class="btn btn-primary" id="bCo">Cadastrar</button>`});
   el('bCo').onclick=async()=>{ const f=el('fCo'); if(!f.reportValidity())return; const d=Object.fromEntries(new FormData(f)); const b=el('bCo');b.disabled=true;b.textContent='Cadastrando…';
@@ -1180,6 +1228,106 @@ function renderFbList(fbs){
     <div style="display:flex;justify-content:space-between;gap:10px"><span class="pill cyan">${esc(f.tipo)}</span><span class="page-sub">${fmtDate(f.data)} · ${esc(f.autorNome)}</span></div>
     <div class="v" style="white-space:pre-wrap">${esc(f.texto)}</div></div>`).join('');
 }
+
+/* ---------------- COMUNICADOS ---------------- */
+VIEWS.comunicados = async function(){
+  const adm = S.user.perfil==='admin';
+  setHead('Comunicados','Avisos para toda a empresa. Cada um some sozinho na data definida.',
+    adm?`<button class="btn btn-primary" onclick="modalComunicado()">${ICON.plus}<span>Novo comunicado</span></button>`:'');
+  const {comunicados} = await api('listarComunicados', adm?{incluirExpirados:true}:{});
+  const vigentes = comunicados.filter(c=>!c.expirado);
+  const expirados = comunicados.filter(c=>c.expirado);
+  if(!comunicados.length) return el('content').innerHTML = adm
+    ? emptyState('Nenhum comunicado','Publique um aviso para toda a empresa. Você define por quantos dias ele fica no ar.','Novo comunicado','modalComunicado()')
+    : `<div class="empty">${ICON.message}<p>Nenhum comunicado no momento.</p></div>`;
+  const card = c => `<div class="card ${c.expirado?'':'section-gap'}" style="${c.expirado?'opacity:.55':''}">
+    <div class="card-h"><h3>${esc(c.titulo)}</h3>
+      <div class="row-actions">
+        ${c.expirado?'<span class="pill gray">expirado</span>':`<span class="pill green"><span class="dot"></span>até ${fmtDay(c.expiraEm)}</span>`}
+        ${adm?`<button class="btn btn-danger btn-sm btn-icon" title="Excluir" onclick="excluirComunicado('${c.id}','${esc(c.titulo)}')">${ICON.trash}</button>`:''}
+      </div>
+    </div>
+    <div style="white-space:pre-wrap;line-height:1.6">${esc(c.texto)}</div>
+    <div class="page-sub" style="margin-top:12px;font-size:.78rem">${esc(c.autorNome||'')} · ${fmtDay(c.dataCriacao)}</div>
+  </div>`;
+  el('content').innerHTML = vigentes.map(card).join('')
+    + (expirados.length?`<div class="block-title section-gap">Já expirados (só você vê)</div>${expirados.map(card).join('')}`:'');
+};
+function modalComunicado(){
+  modal({title:'Novo comunicado', body:`<form id="fCom">
+    <div class="field"><label>Título</label><input name="titulo" required placeholder="Ex.: Reunião geral na sexta"/></div>
+    <div class="field"><label>Mensagem</label><textarea name="texto" rows="5" required placeholder="Escreva o aviso..."></textarea></div>
+    <div class="field"><label>Ficar visível por</label>
+      <select name="dias">
+        <option value="1">1 dia</option><option value="3">3 dias</option>
+        <option value="7" selected>7 dias</option><option value="15">15 dias</option>
+        <option value="30">30 dias</option><option value="90">90 dias</option>
+      </select>
+      <div class="hint">Passado esse prazo, o comunicado some da tela de todo mundo automaticamente.</div>
+    </div>
+  </form>`, footer:`<button class="btn btn-ghost" onclick="closeModal()">Cancelar</button><button class="btn btn-primary" id="bCom">Publicar</button>`});
+  el('bCom').onclick=async()=>{ const f=el('fCom'); if(!f.reportValidity())return; const d=Object.fromEntries(new FormData(f));
+    const b=el('bCom'); b.disabled=true; b.textContent='Publicando…';
+    try{ await api('criarComunicado',{titulo:d.titulo,texto:d.texto,dias:Number(d.dias)}); toast('Comunicado publicado.','ok'); closeModal(); go('comunicados'); }
+    catch(e){ toast(e.message,'err'); b.disabled=false; b.textContent='Publicar'; } };
+}
+async function excluirComunicado(id,titulo){
+  confirmar(`Excluir o comunicado "${titulo}"?`, async()=>{
+    try{ await api('excluirComunicado',{id}); toast('Comunicado excluído.','ok'); go('comunicados'); }catch(e){ toast(e.message,'err'); }
+  });
+}
+
+/* ---------------- ANIVERSARIANTES ---------------- */
+const MESES=['janeiro','fevereiro','março','abril','maio','junho','julho','agosto','setembro','outubro','novembro','dezembro'];
+function confetesHtml(qtd){
+  const cores=['#2CA6E0','#E8B54A','#3DD68C','#F26B84','#48C6F7','#FFFFFF'];
+  let h='';
+  for(let i=0;i<qtd;i++){
+    const c=cores[i%cores.length], esq=Math.round(Math.random()*100), dur=(2.6+Math.random()*2.4).toFixed(2), atraso=(Math.random()*3.2).toFixed(2), larg=6+Math.round(Math.random()*6);
+    h+=`<span class="confete" style="left:${esq}%;width:${larg}px;height:${larg+5}px;background:${c};animation-duration:${dur}s;animation-delay:${atraso}s"></span>`;
+  }
+  return h;
+}
+function fogosHtml(explosoes){
+  const cores=['#E8B54A','#48C6F7','#3DD68C','#F26B84','#FFFFFF'];
+  let h='';
+  for(let e=0;e<explosoes;e++){
+    const cx=12+Math.round(Math.random()*76), cy=10+Math.round(Math.random()*45), atraso=(e*0.7+Math.random()*0.6).toFixed(2), cor=cores[e%cores.length];
+    for(let i=0;i<14;i++){
+      const ang=(Math.PI*2*i)/14, raio=34+Math.random()*30;
+      h+=`<span class="fogo" style="left:${cx}%;top:${cy}%;background:${cor};box-shadow:0 0 7px ${cor};
+        --dx:${(Math.cos(ang)*raio).toFixed(1)}px;--dy:${(Math.sin(ang)*raio).toFixed(1)}px;
+        animation-duration:1.5s;animation-delay:${atraso}s"></span>`;
+    }
+  }
+  return h;
+}
+VIEWS.aniversariantes = async function(){
+  setHead('Aniversariantes','Quem está de parabéns hoje');
+  const r = await api('aniversariantes');
+  const hoje = r.aniversariantes||[], prox = r.proximos||[];
+  const festa = hoje.length
+    ? `<div class="bday-card">${confetesHtml(46)}${fogosHtml(4)}
+        <div class="conteudo">
+          <div class="bday-parabens">🎉 Parabéns!</div>
+          ${hoje.map(p=>`<div style="margin:16px 0">
+            <div class="bday-foto">${p.foto?`<img src="${p.foto}"/>`:initials(p.nome)}</div>
+            <div class="bday-nome">${esc(p.nome)}</div>
+            <div class="bday-sub">${p.idade?`completa ${p.idade} anos`:''}${p.antecipado?` · faz aniversário no dia ${Number(p.dia)} de ${MESES[p.mes-1]}`:''}</div>
+            <div class="bday-sub" style="margin-top:5px">${[p.cargoNome,p.areaNome].filter(Boolean).map(esc).join(' · ')}</div>
+          </div>`).join('<div style="height:1px;background:rgba(255,255,255,.09);margin:18px 0"></div>')}
+          ${hoje.some(p=>p.antecipado)?`<div class="hint" style="margin-top:14px;display:inline-block">${ICON.info} Quem faz aniversário no fim de semana já aparece na sexta.</div>`:''}
+        </div></div>`
+    : `<div class="empty">${ICON.cake}<p>Ninguém faz aniversário hoje.</p></div>`;
+  const lista = prox.length
+    ? `<div class="block-title section-gap">Próximos aniversários</div>
+       <div class="card"><table class="tbl"><tbody>${prox.map(p=>`<tr>
+         <td><div style="display:flex;align-items:center;gap:11px">${avatarHtml(p,34)}<div><b>${esc(p.nome)}</b><br><span class="page-sub">${[p.cargoNome,p.areaNome].filter(Boolean).map(esc).join(' · ')}</span></div></div></td>
+         <td class="page-sub mono">${String(p.dia).padStart(2,'0')} de ${MESES[p.mes-1]}</td>
+       </tr>`).join('')}</tbody></table></div>`
+    : '';
+  el('content').innerHTML = festa + lista;
+};
 
 /* ---------------- ORGANOGRAMA (todos) ---------------- */
 VIEWS.organograma = async function(){
@@ -1417,6 +1565,7 @@ async function modalAddPessoa(areaId,areaNome){
       <div class="field"><label>Nome completo</label><input name="nome"/></div>
       <div class="form-row"><div class="field"><label>E-mail</label><input name="email" type="email"/></div><div class="field"><label>Telefone</label><input name="telefone"/></div></div>
       <div class="form-row"><div class="field"><label>Login</label><input name="login"/></div><div class="field"><label>Senha</label>${pwd('senha')}</div></div>
+      <div class="form-row"><div class="field"><label>Data de nascimento</label><input name="dataNascimento" type="date"/></div><div class="field"><label>Data de admissão</label><input name="dataAdmissao" type="date"/></div></div>
       <div class="form-row"><div class="field"><label>Cargo</label><select name="cargoId"><option value="">— sem cargo —</option>${cargos.map(c=>`<option value="${c.id}">${esc(c.nome)}</option>`).join('')}</select></div><div class="field"><label>Salário (R$)</label><input name="salario" type="number" step="0.01" min="0"/></div></div>
     </div>
   </form>`, footer:`<button class="btn btn-ghost" onclick="closeModal()">Cancelar</button><button class="btn btn-primary" id="bAP">Adicionar</button>`});
@@ -1427,7 +1576,7 @@ async function modalAddPessoa(areaId,areaNome){
     try{
       if(ids.length) await api('atribuirMembro',{colaboradorIds:ids,areaId:areaId});
       if(novo){ if(!d.nome||!d.login||!d.senha) throw new Error('Para cadastrar uma pessoa nova, preencha nome, login e senha.');
-        await api('criarUsuario',{areaId:areaId,nome:d.nome,email:d.email,telefone:d.telefone,login:d.login,senha:d.senha,cargoId:d.cargoId,salario:d.salario}); }
+        await api('criarUsuario',{areaId:areaId,nome:d.nome,email:d.email,telefone:d.telefone,login:d.login,senha:d.senha,cargoId:d.cargoId,salario:d.salario,dataNascimento:d.dataNascimento,dataAdmissao:d.dataAdmissao}); }
       const n=ids.length+(novo?1:0);
       toast(n>1?(n+' pessoas adicionadas à área.'):'Pessoa adicionada à área.','ok'); closeModal(); go('organograma');
     }catch(e){ toast(e.message,'err'); b.disabled=false; b.textContent='Adicionar'; } };
