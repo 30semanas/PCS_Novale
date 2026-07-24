@@ -110,7 +110,9 @@ input,textarea,select{font-family:inherit}
 .side-foot{margin-top:auto;border-top:1px solid var(--border-soft);padding-top:16px}
 .user-row{display:flex;align-items:center;gap:8px}
 .user-chip{flex:1;min-width:0;display:flex;align-items:center;gap:11px;padding:7px 9px;border-radius:11px;
-  background:transparent;border:1px solid transparent;cursor:pointer;text-align:left;transition:.15s}
+  background:transparent;border:1px solid transparent;cursor:pointer;text-align:left;transition:.15s;
+  color:var(--text);font-family:inherit}
+.user-chip .nm{color:var(--text)}
 .user-chip:hover{background:var(--surface);border-color:var(--border-soft)}
 .avatar{width:38px;height:38px;border-radius:11px;background:linear-gradient(135deg,var(--cyan),var(--cyan-deep));overflow:hidden;
   display:grid;place-items:center;font-weight:700;color:#06121D;font-family:var(--f-disp);flex:none}
@@ -293,10 +295,14 @@ fieldset legend{font-size:.76rem;font-weight:700;color:var(--cyan-bright);paddin
 .org-tree>ul{display:inline-flex;min-width:100%;box-sizing:border-box;padding:0 32px}
 .org-tree>ul>li{padding-top:0}
 .org-tree>ul>li::before,.org-tree>ul>li::after{display:none}
-.org-card{position:relative;background:var(--card2,#182140);border:1px solid rgba(255,255,255,.09);border-radius:12px;padding:11px 13px;width:214px;min-height:78px;box-shadow:0 5px 14px rgba(0,0,0,.24)}
+.org-card{position:relative;background:var(--card2,#182140);border:1px solid rgba(255,255,255,.09);border-radius:12px;
+  padding:11px 13px;width:214px;height:96px;box-sizing:border-box;overflow:hidden;cursor:pointer;
+  box-shadow:0 5px 14px rgba(0,0,0,.24);transition:border-color .15s,transform .15s}
+.org-card:hover{border-color:rgba(72,198,247,.45);transform:translateY(-1px)}
 .org-card-h{display:flex;align-items:flex-start;justify-content:space-between;gap:8px;font-family:'Sora',system-ui,sans-serif;font-weight:600;font-size:.95rem;line-height:1.2}
-.org-name{display:flex;align-items:center;gap:6px;flex-wrap:wrap;min-width:0}
-.org-resp{color:var(--muted,#8D99B8);font-size:.8rem;margin-top:5px;display:flex;align-items:center;gap:6px}
+.org-name{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:block}
+.org-resp{color:var(--muted,#8D99B8);font-size:.8rem;margin-top:5px;display:flex;align-items:center;gap:6px;min-width:0}
+.org-resp span.n{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
 .org-resp svg{width:13px;height:13px;flex:none}
 .org-meta{margin-top:8px;display:flex;gap:7px;flex-wrap:wrap;align-items:center}
 .org-actions{position:absolute;left:8px;right:8px;bottom:8px;display:none;gap:5px;flex-wrap:wrap;justify-content:center;background:rgba(16,23,48,.97);border:1px solid rgba(255,255,255,.12);border-radius:10px;padding:6px;box-shadow:0 6px 16px rgba(0,0,0,.4)}
@@ -310,6 +316,11 @@ fieldset legend{font-size:.76rem;font-weight:700;color:var(--cyan-bright);paddin
 .org-toggle.closed svg{transform:rotate(-90deg)}
 .org-people{cursor:pointer;font:inherit;display:inline-flex;align-items:center}
 .org-people:hover{filter:brightness(1.25)}
+.pick-list{max-height:260px;overflow:auto;border:1px solid var(--border-soft);border-radius:11px;padding:6px}
+.pick-item{display:flex;align-items:center;gap:10px;padding:8px 9px;border-radius:9px;cursor:pointer}
+.pick-item:hover{background:var(--surface)}
+.pick-item input{width:17px;height:17px;accent-color:var(--cyan);flex:none;cursor:pointer}
+.pick-empty{padding:14px;text-align:center}
 </style>
 </head>
 <body>
@@ -1043,12 +1054,15 @@ async function modalAtribuirDisponivel(){
   if(!areasLidero.length){ return modal({title:'Sem área sob sua liderança', body:`<div class="inline-note">${ICON.info}<span>Você precisa ser responsável por uma área para adicionar pessoas.</span></div>`, footer:`<button class="btn btn-primary" onclick="closeModal()">Entendi</button>`}); }
   const {disponiveis}=await api('listarDisponiveis');
   if(!disponiveis.length){ return modal({title:'Adicionar disponível', body:`<div class="inline-note">${ICON.info}<span>Não há pessoas disponíveis no momento. Crie novas em "Nova pessoa" ou peça para liberarem alguém de outra área.</span></div>`, footer:`<button class="btn btn-primary" onclick="closeModal()">Entendi</button>`}); }
-  modal({title:'Adicionar pessoa disponível', body:`<form id="fAD">
-    <div class="field"><label>Pessoa disponível</label><select name="colaboradorId" required>${disponiveis.map(u=>`<option value="${u.id}">${esc(u.nome)} (@${esc(u.login)})${u.cargoNome?' · '+esc(u.cargoNome):''}</option>`).join('')}</select></div>
+  modal({wide:true, title:'Adicionar pessoas disponíveis', body:`<form id="fAD">
     <div class="field"><label>Adicionar à área</label><select name="areaId" required>${areasLidero.map(a=>`<option value="${a.id}">${esc(a.nome)}</option>`).join('')}</select></div>
+    <div class="field"><label>Pessoas disponíveis (marque quantas quiser)</label>${pickList('adPick', disponiveis)}</div>
   </form>`, footer:`<button class="btn btn-ghost" onclick="closeModal()">Cancelar</button><button class="btn btn-primary" id="bAD">Adicionar</button>`});
-  el('bAD').onclick=async()=>{ const f=el('fAD'); if(!f.reportValidity())return; const d=Object.fromEntries(new FormData(f)); const b=el('bAD');b.disabled=true;
-    try{ await api('atribuirMembro',{colaboradorId:d.colaboradorId,areaId:d.areaId}); toast('Pessoa adicionada.','ok'); closeModal(); go('colaboradores'); }catch(e){ toast(e.message,'err'); b.disabled=false; } };
+  el('bAD').onclick=async()=>{ const f=el('fAD'); if(!f.reportValidity())return; const d=Object.fromEntries(new FormData(f));
+    const ids=pickSelecionados('adPick'); if(!ids.length){ toast('Marque ao menos uma pessoa.','err'); return; }
+    const b=el('bAD'); b.disabled=true; b.textContent='Adicionando…';
+    try{ await api('atribuirMembro',{colaboradorIds:ids,areaId:d.areaId}); toast(ids.length>1?(ids.length+' pessoas adicionadas.'):'Pessoa adicionada.','ok'); closeModal(); go('colaboradores'); }
+    catch(e){ toast(e.message,'err'); b.disabled=false; b.textContent='Adicionar'; } };
 }
 async function abrirColaborador(id){
   loading();
@@ -1167,7 +1181,7 @@ VIEWS.organograma = async function(){
   const temSubs = areas.some(a=>areas.some(x=>x.paiId===a.id));
   const acaoAdmin = (S.user.perfil==='admin') ? `<button class="btn btn-primary" onclick="modalNovaArea('','')">${ICON.plus}<span>Nova área / Empresa</span></button>` : '';
   const acoes = (roots.length&&temSubs?`<button class="btn btn-ghost" onclick="expandAllOrg()">Expandir tudo</button><button class="btn btn-ghost" onclick="collapseAllOrg()">Recolher tudo</button>`:'') + acaoAdmin;
-  setHead('Organograma','Estrutura da empresa: use os botões ⌄ para abrir ou agrupar cada ramo', acoes);
+  setHead('Organograma','Clique em uma área para ver os detalhes · use os botões ⌄ para abrir ou agrupar cada ramo', acoes);
   if(!roots.length){
     if(S.user.perfil==='admin') return el('content').innerHTML = emptyState('Monte sua empresa','Crie a Empresa (o topo do organograma) e o responsável por ela.','Criar Empresa',"modalNovaArea('','')");
     return el('content').innerHTML = emptyState('Organograma em construção','A estrutura ainda não foi criada pelo administrador.','','');
@@ -1188,26 +1202,61 @@ function orgPodeGerir(a){ return S.user.perfil==='admin' || String(a.responsavel
 function orgPodeAddPessoa(a){ return orgPodeGerir(a) || orgCanTransfer(a); }
 function orgNode(a, areas){
   const filhos = areas.filter(x=>x.paiId===a.id);
-  const gerir = orgPodeGerir(a);
-  const transf = orgCanTransfer(a);
   const collapsed = !!(S.cache.orgCollapsed && S.cache.orgCollapsed.has(a.id));
-  const addp = orgPodeAddPessoa(a);
-  const aj = JSON.stringify(a).replace(/'/g,"&#39;");
   return `<li>
-    <div class="org-card"${a.descricao?` title="${esc(a.descricao)}"`:''}>
-      <div class="org-card-h"><span class="org-name">${esc(a.nome)} ${a.paiId?'':'<span class="pill gold">Empresa</span>'}</span>${filhos.length?`<button class="org-toggle ${collapsed?'closed':''}" title="${collapsed?('Abrir '+filhos.length+' área(s) abaixo'):'Agrupar'}" onclick="toggleOrg('${a.id}')">${ICON.chevron}</button>`:''}</div>
-      <div class="org-resp">${ICON.users} ${a.responsavelNome?esc(a.responsavelNome):'<span style="color:var(--red)">sem responsável</span>'}</div>
-      <div class="org-meta"><button class="pill cyan org-people" title="Ver pessoas da área" onclick='verMembros("${a.id}","${esc(a.nome)}")'><span class="dot"></span>${a.qtdMembros}</button>${(collapsed&&filhos.length)?`<span class="pill gold">+${filhos.length} área(s)</span>`:''}</div>
-      ${(gerir||transf||addp)?`<div class="org-actions">
-        ${gerir?`<button class="btn btn-ghost btn-sm btn-icon" title="Nova subárea" onclick='modalNovaArea("${a.id}","${esc(a.nome)}")'>${ICON.plus}</button>`:''}
-        ${addp?`<button class="btn btn-ghost btn-sm btn-icon" title="Adicionar pessoa" onclick='modalAddPessoa("${a.id}","${esc(a.nome)}")'>${ICON.users}</button>`:''}
-        ${gerir?`<button class="btn btn-ghost btn-sm btn-icon" title="Editar" onclick='modalEditarArea(${aj})'>${ICON.edit}</button>`:''}
-        ${transf&&a.paiId?`<button class="btn btn-ghost btn-sm btn-icon" title="Transferir para outra área" onclick='modalMoverArea(${aj})'>${ICON.move}</button>`:''}
-        ${gerir&&a.paiId?`<button class="btn btn-danger btn-sm btn-icon" title="Excluir" onclick="excluirArea('${a.id}','${esc(a.nome)}')">${ICON.trash}</button>`:''}
-      </div>`:''}
+    <div class="org-card" title="Clique para ver os detalhes" onclick='verArea("${a.id}")'>
+      <div class="org-card-h"><span class="org-name">${esc(a.nome)}</span>${filhos.length?`<button class="org-toggle ${collapsed?'closed':''}" title="${collapsed?('Abrir '+filhos.length+' área(s) abaixo'):'Agrupar'}" onclick="event.stopPropagation();toggleOrg('${a.id}')">${ICON.chevron}</button>`:''}</div>
+      <div class="org-resp">${ICON.users}<span class="n">${a.responsavelNome?esc(a.responsavelNome):'<span style="color:var(--red)">sem responsável</span>'}</span></div>
+      <div class="org-meta">${a.paiId?'':'<span class="pill gold">Empresa</span>'}<button class="pill cyan org-people" title="Ver pessoas da área" onclick='event.stopPropagation();verMembros("${a.id}","${esc(a.nome)}")'><span class="dot"></span>${a.qtdMembros}</button>${(collapsed&&filhos.length)?`<span class="pill gold">+${filhos.length}</span>`:''}</div>
     </div>
     ${(filhos.length && !collapsed)?`<ul>${filhos.map(c=>orgNode(c,areas)).join('')}</ul>`:''}
   </li>`;
+}
+/* lista de seleção múltipla de pessoas */
+function pickList(id, pessoas){
+  if(!pessoas.length) return `<div class="pick-list"><div class="pick-empty page-sub">Ninguém disponível no momento.</div></div>`;
+  return `<div class="pick-list" id="${id}">${pessoas.map(u=>`
+    <label class="pick-item"><input type="checkbox" value="${u.id}"/>
+      <span style="min-width:0"><b>${esc(u.nome)}</b><br><span class="page-sub mono" style="font-size:.74rem">@${esc(u.login)}${u.cargoNome?' · '+esc(u.cargoNome):''}</span></span>
+    </label>`).join('')}</div>`;
+}
+function pickSelecionados(id){
+  const box=el(id); if(!box) return [];
+  return [...box.querySelectorAll('input:checked')].map(i=>i.value);
+}
+async function verArea(id){
+  const areas=S.cache.areas||[]; const a=areas.find(x=>String(x.id)===String(id)); if(!a) return;
+  const pai=a.paiId?areas.find(x=>String(x.id)===String(a.paiId)):null;
+  const filhos=areas.filter(x=>String(x.paiId)===String(a.id));
+  const gerir=orgPodeGerir(a), transf=orgCanTransfer(a), addp=orgPodeAddPessoa(a);
+  const aj=JSON.stringify(a).replace(/'/g,"&#39;");
+  let r={membros:[],avaliadorNome:'',responsavelNome:a.responsavelNome};
+  try{ r=await api('membrosArea',{areaId:a.id}); }catch(e){}
+  const linha=(k,v)=>`<div style="display:flex;gap:12px;padding:9px 0;border-bottom:1px solid var(--border-soft)">
+    <div style="min-width:140px;color:var(--muted2);font-size:.74rem;font-weight:700;text-transform:uppercase;letter-spacing:.04em;padding-top:2px">${k}</div>
+    <div style="flex:1;min-width:0">${v}</div></div>`;
+  const membros=r.membros||[];
+  const listaPessoas = membros.length
+    ? `<div style="display:flex;flex-direction:column;gap:7px">${membros.map(c=>`<div style="display:flex;align-items:center;gap:9px">
+        ${avatarHtml(c,28)}<div style="min-width:0"><b>${esc(c.nome)}</b> ${c.ehResponsavel?'<span class="pill gold">Responsável</span>':''}
+        <br><span class="page-sub mono" style="font-size:.74rem">@${esc(c.login)}${c.cargoNome?' · '+esc(c.cargoNome):''}</span></div></div>`).join('')}</div>`
+    : '<span class="page-sub">Nenhuma pessoa nesta área ainda.</span>';
+  const acoes = [];
+  if(gerir) acoes.push(`<button class="btn btn-ghost btn-sm" onclick='closeModal();modalNovaArea("${a.id}","${esc(a.nome)}")'>${ICON.plus}<span>Subárea</span></button>`);
+  if(addp)  acoes.push(`<button class="btn btn-ghost btn-sm" onclick='closeModal();modalAddPessoa("${a.id}","${esc(a.nome)}")'>${ICON.users}<span>Pessoa</span></button>`);
+  if(gerir) acoes.push(`<button class="btn btn-ghost btn-sm" onclick='closeModal();modalEditarArea(${aj})'>${ICON.edit}<span>Editar</span></button>`);
+  if(transf&&a.paiId) acoes.push(`<button class="btn btn-ghost btn-sm" onclick='closeModal();modalMoverArea(${aj})'>${ICON.move}<span>Transferir</span></button>`);
+  if(gerir&&a.paiId) acoes.push(`<button class="btn btn-danger btn-sm" onclick='closeModal();excluirArea("${a.id}","${esc(a.nome)}")'>${ICON.trash}<span>Excluir</span></button>`);
+  modal({wide:true, title:a.nome, body:
+      linha('Área', `<b>${esc(a.nome)}</b> ${a.paiId?'':'<span class="pill gold">Empresa</span>'}`)
+    + (a.descricao?linha('Descrição', esc(a.descricao)):'')
+    + linha('Responsável', a.responsavelNome?esc(a.responsavelNome):'<span style="color:var(--red)">sem responsável</span>')
+    + (r.avaliadorNome && r.avaliadorNome!==r.responsavelNome ? linha('Quem avalia', esc(r.avaliadorNome)+' <span class="page-sub">(responsável acima)</span>') : '')
+    + linha('Responde a', pai?esc(pai.nome):'<span class="page-sub">nível mais alto da empresa</span>')
+    + linha('Áreas abaixo', filhos.length?filhos.map(f=>`<span class="pill cyan" style="margin:0 5px 5px 0;display:inline-block">${esc(f.nome)}</span>`).join(''):'<span class="page-sub">nenhuma</span>')
+    + linha('Pessoas ('+membros.length+')', listaPessoas)
+    + (acoes.length?`<div style="display:flex;gap:7px;flex-wrap:wrap;margin-top:16px">${acoes.join('')}</div>`:'')
+  });
 }
 function orgCanTransfer(a){
   if(S.user.perfil==='admin') return true;
@@ -1257,26 +1306,43 @@ async function modalNovaArea(paiId,paiNome){
     try{ await api('criarArea',{nome:d.nome,descricao:d.descricao,paiId:paiId,responsavelId:d.responsavelId,avaliadoPor:d.avaliadoPor||'responsavel'}); toast('Área criada.','ok'); closeModal(); go('organograma'); }
     catch(e){ toast(e.message,'err'); b.disabled=false; } };
 }
-function modalEditarArea(a){
+async function modalEditarArea(a){
+  // só admin ou um responsável acima desta área pode trocar quem responde por ela
+  const podeTrocarResp = orgCanTransfer(a);
+  let candidatos=[];
+  if(podeTrocarResp){
+    try{
+      if(S.user.perfil==='admin'){ const {usuarios}=await api('listarUsuarios'); candidatos=usuarios.filter(u=>String(u.ativo)!=='false'); }
+      else { const [{colaboradores},{disponiveis}]=await Promise.all([api('listarColaboradores'),api('listarDisponiveis')]);
+             const vistos=new Set(); candidatos=[...(colaboradores||[]),...(disponiveis||[])].filter(u=>!vistos.has(u.id)&&vistos.add(u.id)); }
+    }catch(e){ candidatos=[]; }
+    if(a.responsavelId && !candidatos.some(u=>String(u.id)===String(a.responsavelId)))
+      candidatos.unshift({id:a.responsavelId,nome:a.responsavelNome||'(responsável atual)',login:''});
+  }
   modal({title:`Editar ${a.nome}`, body:`<form id="fEA">
     <div class="field"><label>Nome</label><input name="nome" required value="${esc(a.nome)}"/></div>
     <div class="field"><label>Descrição</label><input name="descricao" value="${esc(a.descricao||'')}"/></div>
+    ${podeTrocarResp?`<div class="field"><label>Responsável pela área</label>
+      <select name="responsavelId">${candidatos.map(u=>`<option value="${u.id}" ${String(u.id)===String(a.responsavelId)?'selected':''}>${esc(u.nome)}${u.login?' (@'+esc(u.login)+')':''}</option>`).join('')}</select>
+      <div class="hint">Ao trocar, a pessoa escolhida passa a liderar esta área e a responder ao responsável da área acima.</div></div>`
+    :`<div class="hint">${ICON.info} Para trocar o responsável desta área, é preciso ser o administrador ou um responsável acima dela.</div>`}
   </form>`, footer:`<button class="btn btn-ghost" onclick="closeModal()">Cancelar</button><button class="btn btn-primary" id="bEA">Salvar</button>`});
-  el('bEA').onclick=async()=>{ const d=Object.fromEntries(new FormData(el('fEA'))); const b=el('bEA');b.disabled=true;
-    try{ await api('atualizarArea',{id:a.id,nome:d.nome,descricao:d.descricao}); toast('Área atualizada.','ok'); closeModal(); go('organograma'); }catch(e){ toast(e.message,'err'); b.disabled=false; } };
+  el('bEA').onclick=async()=>{ const d=Object.fromEntries(new FormData(el('fEA'))); const b=el('bEA');b.disabled=true;b.textContent='Salvando…';
+    try{
+      const req={id:a.id,nome:d.nome,descricao:d.descricao};
+      if(d.responsavelId && String(d.responsavelId)!==String(a.responsavelId)) req.responsavelId=d.responsavelId;
+      await api('atualizarArea',req); toast('Área atualizada.','ok'); closeModal(); go('organograma');
+    }catch(e){ toast(e.message,'err'); b.disabled=false; b.textContent='Salvar'; } };
 }
 function apToggle(v){ const n=el('apNew'); if(n) n.style.display=(v==='__new__')?'block':'none'; }
 async function modalAddPessoa(areaId,areaNome){
   const [{cargos},{disponiveis}]=await Promise.all([api('listarCargos'),api('listarDisponiveis')]);
-  modal({title:`Adicionar pessoa · ${areaNome}`, body:`<form id="fAP">
-    <div class="field"><label>Pessoa</label>
-      <select name="modo" oninput="apToggle(this.value)">
-        <option value="">— Escolher disponível —</option>
-        ${disponiveis.map(u=>`<option value="${u.id}">${esc(u.nome)} (@${esc(u.login)})${u.cargoNome?' · '+esc(u.cargoNome):''}</option>`).join('')}
-        <option value="__new__">➕ Criar nova pessoa</option>
-      </select>
-      <div class="hint">${disponiveis.length?'Escolha alguém do banco de disponíveis ou crie uma pessoa nova.':'Não há pessoas disponíveis — crie uma nova.'}</div>
+  modal({wide:true, title:`Adicionar pessoas · ${areaNome}`, body:`<form id="fAP">
+    <div class="field"><label>Pessoas disponíveis (marque quantas quiser)</label>
+      ${pickList('apPick', disponiveis)}
+      <div class="hint">Marque uma ou várias pessoas de uma vez. Para incluir alguém que já está em outra área, o responsável atual precisa liberá-la antes.</div>
     </div>
+    <div class="field"><label><input type="checkbox" id="apNovo" onchange="apToggle(this.checked?'__new__':'')" style="width:16px;height:16px;accent-color:var(--cyan);vertical-align:-2px;margin-right:6px"/>Cadastrar uma pessoa nova</label></div>
     <div id="apNew" style="display:none">
       <div class="field"><label>Nome completo</label><input name="nome"/></div>
       <div class="form-row"><div class="field"><label>E-mail</label><input name="email" type="email"/></div><div class="field"><label>Telefone</label><input name="telefone"/></div></div>
@@ -1284,13 +1350,17 @@ async function modalAddPessoa(areaId,areaNome){
       <div class="form-row"><div class="field"><label>Cargo</label><select name="cargoId"><option value="">— sem cargo —</option>${cargos.map(c=>`<option value="${c.id}">${esc(c.nome)}</option>`).join('')}</select></div><div class="field"><label>Salário (R$)</label><input name="salario" type="number" step="0.01" min="0"/></div></div>
     </div>
   </form>`, footer:`<button class="btn btn-ghost" onclick="closeModal()">Cancelar</button><button class="btn btn-primary" id="bAP">Adicionar</button>`});
-  el('bAP').onclick=async()=>{ const d=Object.fromEntries(new FormData(el('fAP'))); const b=el('bAP');b.disabled=true;
+  el('bAP').onclick=async()=>{ const d=Object.fromEntries(new FormData(el('fAP'))); const b=el('bAP');
+    const ids=pickSelecionados('apPick'); const novo=el('apNovo') && el('apNovo').checked;
+    if(!ids.length && !novo){ toast('Marque ao menos uma pessoa ou cadastre uma nova.','err'); return; }
+    b.disabled=true; b.textContent='Adicionando…';
     try{
-      if(d.modo==='__new__'){ if(!d.nome||!d.login||!d.senha){ toast('Preencha nome, login e senha.','err'); b.disabled=false; return; } await api('criarUsuario',{areaId:areaId,nome:d.nome,email:d.email,telefone:d.telefone,login:d.login,senha:d.senha,cargoId:d.cargoId,salario:d.salario}); }
-      else if(d.modo){ await api('atribuirMembro',{colaboradorId:d.modo,areaId:areaId}); }
-      else { toast('Escolha uma pessoa ou crie uma nova.','err'); b.disabled=false; return; }
-      toast('Pessoa adicionada à área.','ok'); closeModal(); go('organograma');
-    }catch(e){ toast(e.message,'err'); b.disabled=false; } };
+      if(ids.length) await api('atribuirMembro',{colaboradorIds:ids,areaId:areaId});
+      if(novo){ if(!d.nome||!d.login||!d.senha) throw new Error('Para cadastrar uma pessoa nova, preencha nome, login e senha.');
+        await api('criarUsuario',{areaId:areaId,nome:d.nome,email:d.email,telefone:d.telefone,login:d.login,senha:d.senha,cargoId:d.cargoId,salario:d.salario}); }
+      const n=ids.length+(novo?1:0);
+      toast(n>1?(n+' pessoas adicionadas à área.'):'Pessoa adicionada à área.','ok'); closeModal(); go('organograma');
+    }catch(e){ toast(e.message,'err'); b.disabled=false; b.textContent='Adicionar'; } };
 }
 async function liberarPessoa(id,nome,voltar){
   confirmar(`Liberar "${nome}" da equipe? A pessoa fica disponível para ser atribuída a outra área.`, async()=>{
@@ -1481,7 +1551,7 @@ async function abrirAvaliacao(id){
   const resp = await api('obterAvaliacao',{avaliacaoId:id});
   const av = resp.avaliacao || resp;   // o backend responde { avaliacao: {...} }
   S.cache.av = av;
-  const isColab = S.user.perfil==='colaborador';
+  const isColab = String(av.colaboradorId)===String(S.user.id);   // sou a pessoa avaliada
   const criterios = av.criterios || [];
   const metas = av.metasAvaliar || [];
   const promocao = av.promocaoPerguntas || [];
@@ -1582,7 +1652,7 @@ function ligarEditor(av,criterios,metas,promocao,editKey){
 }
 
 function atualizarLive(av,criterios,metas,editKey){
-  const axes=axesFor(av); const isColab=S.user.perfil==='colaborador'; const s=[];
+  const axes=axesFor(av); const isColab=String(av.colaboradorId)===String(S.user.id); const s=[];
   const push=(o,name,color)=>{ if(temNotas(o)) s.push({name,color,values:serieValores(o,criterios,metas)}); };
   if(editKey){
     const live=coletarNotas(editKey); const info=SERIE_INFO[editKey];
