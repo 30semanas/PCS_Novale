@@ -630,7 +630,9 @@ function buildNav(){
     {id:'cargos', label:'Cargos', icon:'badge'},
     {id:'avaliacoes', label:'Avaliações', icon:'chart'}
   );
-  if(cap.avaliado) nav.push(
+  // Estas três são sempre exibidas para qualquer pessoa (não-admin): mesmo quem
+  // ainda não está em uma área precisa ver o próprio cargo, feedbacks e avaliações.
+  nav.push(
     {id:'minhas-avaliacoes', label:'Minhas avaliações', icon:'chart'},
     {id:'meu-cargo', label:'Meu cargo', icon:'badge'},
     {id:'meus-feedbacks', label:'Feedbacks', icon:'message'}
@@ -1243,18 +1245,21 @@ VIEWS.comunicados = async function(){
   const card = c => `<div class="card ${c.expirado?'':'section-gap'}" style="${c.expirado?'opacity:.55':''}">
     <div class="card-h"><h3>${esc(c.titulo)}</h3>
       <div class="row-actions">
+        ${c.paraTodos?'<span class="pill cyan">toda a empresa</span>':`<span class="pill gold" title="${esc((c.areasNomes||[]).join(', '))}">${(c.areasNomes||[]).length} área(s)</span>`}
         ${c.expirado?'<span class="pill gray">expirado</span>':`<span class="pill green"><span class="dot"></span>até ${fmtDay(c.expiraEm)}</span>`}
         ${adm?`<button class="btn btn-danger btn-sm btn-icon" title="Excluir" onclick="excluirComunicado('${c.id}','${esc(c.titulo)}')">${ICON.trash}</button>`:''}
       </div>
     </div>
     <div style="white-space:pre-wrap;line-height:1.6">${esc(c.texto)}</div>
-    <div class="page-sub" style="margin-top:12px;font-size:.78rem">${esc(c.autorNome||'')} · ${fmtDay(c.dataCriacao)}</div>
+    <div class="page-sub" style="margin-top:12px;font-size:.78rem">${esc(c.autorNome||'')} · ${fmtDay(c.dataCriacao)}${c.paraTodos?'':' · para: '+esc((c.areasNomes||[]).join(', '))}</div>
   </div>`;
   el('content').innerHTML = vigentes.map(card).join('')
     + (expirados.length?`<div class="block-title section-gap">Já expirados (só você vê)</div>${expirados.map(card).join('')}`:'');
 };
-function modalComunicado(){
-  modal({title:'Novo comunicado', body:`<form id="fCom">
+async function modalComunicado(){
+  let areas=[];
+  try{ areas = ordNome(await api('listarAreas').then(r=>r.areas)); }catch(e){ areas=[]; }
+  modal({wide:true, title:'Novo comunicado', body:`<form id="fCom">
     <div class="field"><label>Título</label><input name="titulo" required placeholder="Ex.: Reunião geral na sexta"/></div>
     <div class="field"><label>Mensagem</label><textarea name="texto" rows="5" required placeholder="Escreva o aviso..."></textarea></div>
     <div class="field"><label>Ficar visível por</label>
@@ -1265,10 +1270,34 @@ function modalComunicado(){
       </select>
       <div class="hint">Passado esse prazo, o comunicado some da tela de todo mundo automaticamente.</div>
     </div>
+    <div class="field"><label>Quem recebe</label>
+      <select id="comDest" onchange="comToggleAreas(this.value)">
+        <option value="todos" selected>Toda a empresa</option>
+        <option value="areas">Somente as áreas que eu escolher</option>
+      </select>
+    </div>
+    <div id="comAreas" style="display:none">
+      ${areas.length?`<div class="field"><label>Áreas que vão receber</label>
+        <input class="pick-search" id="comPick_q" placeholder="Buscar área…" autocomplete="off" oninput="pickFiltrar('comPick')"/>
+        <div class="pick-list" id="comPick">${areas.map(a=>`
+          <label class="pick-item" data-busca="${esc(semAcento(a.nome))}">
+            <input type="checkbox" value="${a.id}" onchange="pickContar('comPick','área','áreas')"/>
+            <span style="min-width:0"><b>${esc(a.nome)}</b>${a.responsavelNome?`<br><span class="page-sub" style="font-size:.74rem">${esc(a.responsavelNome)}</span>`:''}</span>
+          </label>`).join('')}
+          <div class="pick-empty page-sub" id="comPick_none" style="display:none">Nenhuma área encontrada.</div>
+        </div>
+        <div class="pick-count" id="comPick_c">Nenhuma área marcada</div></div>
+        <label class="pick-item" style="padding-left:0"><input type="checkbox" id="comSub"/><span>Incluir também as áreas abaixo das que eu marcar</span></label>`
+      :`<div class="inline-note">${ICON.info}<span>Nenhuma área cadastrada ainda. O comunicado irá para toda a empresa.</span></div>`}
+    </div>
   </form>`, footer:`<button class="btn btn-ghost" onclick="closeModal()">Cancelar</button><button class="btn btn-primary" id="bCom">Publicar</button>`});
   el('bCom').onclick=async()=>{ const f=el('fCom'); if(!f.reportValidity())return; const d=Object.fromEntries(new FormData(f));
     const b=el('bCom'); b.disabled=true; b.textContent='Publicando…';
-    try{ await api('criarComunicado',{titulo:d.titulo,texto:d.texto,dias:Number(d.dias)}); toast('Comunicado publicado.','ok'); closeModal(); go('comunicados'); }
+    const so = el('comDest') && el('comDest').value==='areas';
+    const alvos = so ? pickSelecionados('comPick') : [];
+    if(so && !alvos.length){ toast('Marque ao menos uma área ou escolha "Toda a empresa".','err'); b.disabled=false; b.textContent='Publicar'; return; }
+    try{ await api('criarComunicado',{titulo:d.titulo,texto:d.texto,dias:Number(d.dias),areaIds:alvos,
+          incluirSubareas: !!(el('comSub') && el('comSub').checked)}); toast('Comunicado publicado.','ok'); closeModal(); go('comunicados'); }
     catch(e){ toast(e.message,'err'); b.disabled=false; b.textContent='Publicar'; } };
 }
 async function excluirComunicado(id,titulo){
@@ -1276,6 +1305,8 @@ async function excluirComunicado(id,titulo){
     try{ await api('excluirComunicado',{id}); toast('Comunicado excluído.','ok'); go('comunicados'); }catch(e){ toast(e.message,'err'); }
   });
 }
+
+function comToggleAreas(v){ const box=el('comAreas'); if(box) box.style.display = (v==='areas') ? 'block' : 'none'; }
 
 /* ---------------- ANIVERSARIANTES ---------------- */
 const MESES=['janeiro','fevereiro','março','abril','maio','junho','julho','agosto','setembro','outubro','novembro','dezembro'];
@@ -1313,7 +1344,7 @@ VIEWS.aniversariantes = async function(){
           ${hoje.map(p=>`<div style="margin:16px 0">
             <div class="bday-foto">${p.foto?`<img src="${p.foto}"/>`:initials(p.nome)}</div>
             <div class="bday-nome">${esc(p.nome)}</div>
-            <div class="bday-sub">${p.idade?`completa ${p.idade} anos`:''}${p.antecipado?` · faz aniversário no dia ${Number(p.dia)} de ${MESES[p.mes-1]}`:''}</div>
+            <div class="bday-sub">Dê os parabéns a ${esc(String(p.nome).split(' ')[0])}!${p.antecipado?` O aniversário é dia ${Number(p.dia)} de ${MESES[p.mes-1]}.`:''}</div>
             <div class="bday-sub" style="margin-top:5px">${[p.cargoNome,p.areaNome].filter(Boolean).map(esc).join(' · ')}</div>
           </div>`).join('<div style="height:1px;background:rgba(255,255,255,.09);margin:18px 0"></div>')}
           ${hoje.some(p=>p.antecipado)?`<div class="hint" style="margin-top:14px;display:inline-block">${ICON.info} Quem faz aniversário no fim de semana já aparece na sexta.</div>`:''}
@@ -1395,9 +1426,10 @@ function pickFiltrar(id){
   });
   const vazio=el(id+'_none'); if(vazio) vazio.style.display = vis? 'none':'block';
 }
-function pickContar(id){
+function pickContar(id, sing, plur){
   const n=pickSelecionados(id).length; const c=el(id+'_c');
-  if(c) c.textContent = n===0 ? 'Nenhuma pessoa marcada' : (n===1 ? '1 pessoa marcada' : n+' pessoas marcadas');
+  sing=sing||'pessoa'; plur=plur||'pessoas';
+  if(c) c.textContent = n===0 ? ('Nenhuma '+sing+' marcada') : (n===1 ? ('1 '+sing+' marcada') : (n+' '+plur+' marcadas'));
 }
 function pickSelecionados(id){
   const box=el(id); if(!box) return [];
