@@ -316,6 +316,8 @@ fieldset legend{font-size:.76rem;font-weight:700;color:var(--cyan-bright);paddin
 .org-toggle.closed svg{transform:rotate(-90deg)}
 .org-people{cursor:pointer;font:inherit;display:inline-flex;align-items:center}
 .org-people:hover{filter:brightness(1.25)}
+.pick-search{width:100%;margin-bottom:8px}
+.pick-count{margin-top:7px;font-size:.78rem;color:var(--muted2)}
 .pick-list{max-height:260px;overflow:auto;border:1px solid var(--border-soft);border-radius:11px;padding:6px}
 .pick-item{display:flex;align-items:center;gap:10px;padding:8px 9px;border-radius:9px;cursor:pointer}
 .pick-item:hover{background:var(--surface)}
@@ -1032,7 +1034,7 @@ VIEWS.colaboradores = async function(){
   setHead('Minha equipe','Pessoas que respondem a você (diretamente ou pelas áreas que lidera)', `<button class="btn btn-ghost" onclick="modalAtribuirDisponivel()">${ICON.users}<span>Adicionar disponível</span></button><button class="btn btn-primary" onclick="modalColaborador()">${ICON.plus}<span>Nova pessoa</span></button>`);
   const [{colaboradores}, areas, {cargos}] = await Promise.all([ api('listarColaboradores'), api('listarAreas').then(r=>r.areas), api('listarCargos') ]);
   S.cache.areas=areas; S.cache.cargos=cargos;
-  S.cache.areasLidero = areas.filter(a=>String(a.responsavelId||'')===String(S.user.id));
+  S.cache.areasLidero = ordNome(areas.filter(a=>String(a.responsavelId||'')===String(S.user.id)));
   const idsLidero = new Set(S.cache.areasLidero.map(a=>a.id));
   if(!colaboradores.length) return el('content').innerHTML = emptyState('Sua equipe está vazia','Adicione pessoas disponíveis ou crie novas nas áreas que você lidera.','Adicionar disponível','modalAtribuirDisponivel()');
   el('content').innerHTML = `<div class="card"><table class="tbl">
@@ -1177,7 +1179,7 @@ function renderFbList(fbs){
 VIEWS.organograma = async function(){
   const areas = await api('listarAreas').then(r=>r.areas);
   S.cache.areas = areas;
-  const roots = areas.filter(a=>!a.paiId);
+  const roots = ordNome(areas.filter(a=>!a.paiId));
   const temSubs = areas.some(a=>areas.some(x=>x.paiId===a.id));
   const acaoAdmin = (S.user.perfil==='admin') ? `<button class="btn btn-primary" onclick="modalNovaArea('','')">${ICON.plus}<span>Nova área / Empresa</span></button>` : '';
   const acoes = (roots.length&&temSubs?`<button class="btn btn-ghost" onclick="expandAllOrg()">Expandir tudo</button><button class="btn btn-ghost" onclick="collapseAllOrg()">Recolher tudo</button>`:'') + acaoAdmin;
@@ -1192,7 +1194,7 @@ VIEWS.organograma = async function(){
   renderOrg();
 };
 function renderOrg(){
-  const areas=S.cache.areas||[]; const roots=areas.filter(a=>!a.paiId);
+  const areas=S.cache.areas||[]; const roots=ordNome(areas.filter(a=>!a.paiId));
   el('content').innerHTML = `<div class="org-tree"><ul>${roots.map(r=>orgNode(r,areas)).join('')}</ul></div>`;
 }
 function toggleOrg(id){ const s=S.cache.orgCollapsed||(S.cache.orgCollapsed=new Set()); if(s.has(id)) s.delete(id); else s.add(id); renderOrg(); }
@@ -1201,7 +1203,7 @@ function collapseAllOrg(){ const areas=S.cache.areas||[]; S.cache.orgCollapsed=n
 function orgPodeGerir(a){ return S.user.perfil==='admin' || String(a.responsavelId)===String(S.user.id); }
 function orgPodeAddPessoa(a){ return orgPodeGerir(a) || orgCanTransfer(a); }
 function orgNode(a, areas){
-  const filhos = areas.filter(x=>x.paiId===a.id);
+  const filhos = ordNome(areas.filter(x=>x.paiId===a.id));
   const collapsed = !!(S.cache.orgCollapsed && S.cache.orgCollapsed.has(a.id));
   return `<li>
     <div class="org-card" title="Clique para ver os detalhes" onclick='verArea("${a.id}")'>
@@ -1212,22 +1214,63 @@ function orgNode(a, areas){
     ${(filhos.length && !collapsed)?`<ul>${filhos.map(c=>orgNode(c,areas)).join('')}</ul>`:''}
   </li>`;
 }
-/* lista de seleção múltipla de pessoas */
+/* ---------- ordenação e busca ---------- */
+function semAcento(t){ return String(t||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase(); }
+function porNome(a,b){ return String((a&&a.nome)||'').localeCompare(String((b&&b.nome)||''),'pt-BR',{sensitivity:'base'}); }
+function ordNome(lista){ return (lista||[]).slice().sort(porNome); }
+
+/* lista de seleção MÚLTIPLA com busca */
 function pickList(id, pessoas){
+  pessoas = ordNome(pessoas);
   if(!pessoas.length) return `<div class="pick-list"><div class="pick-empty page-sub">Ninguém disponível no momento.</div></div>`;
-  return `<div class="pick-list" id="${id}">${pessoas.map(u=>`
-    <label class="pick-item"><input type="checkbox" value="${u.id}"/>
+  return `<input class="pick-search" id="${id}_q" placeholder="Buscar pelo nome…" autocomplete="off" oninput="pickFiltrar('${id}')"/>
+  <div class="pick-list" id="${id}">${pessoas.map(u=>`
+    <label class="pick-item" data-busca="${esc(semAcento(u.nome+' '+(u.login||'')+' '+(u.cargoNome||'')))}">
+      <input type="checkbox" value="${u.id}" onchange="pickContar('${id}')"/>
       <span style="min-width:0"><b>${esc(u.nome)}</b><br><span class="page-sub mono" style="font-size:.74rem">@${esc(u.login)}${u.cargoNome?' · '+esc(u.cargoNome):''}</span></span>
-    </label>`).join('')}</div>`;
+    </label>`).join('')}
+    <div class="pick-empty page-sub" id="${id}_none" style="display:none">Nenhuma pessoa encontrada com esse nome.</div>
+  </div>
+  <div class="pick-count" id="${id}_c">Nenhuma pessoa marcada</div>`;
+}
+function pickFiltrar(id){
+  const q=semAcento((el(id+'_q')||{}).value||''); let vis=0;
+  [...el(id).querySelectorAll('.pick-item')].forEach(it=>{
+    const bate = !q || (it.dataset.busca||'').indexOf(q)>=0;
+    it.style.display = bate ? 'flex' : 'none'; if(bate) vis++;
+  });
+  const vazio=el(id+'_none'); if(vazio) vazio.style.display = vis? 'none':'block';
+}
+function pickContar(id){
+  const n=pickSelecionados(id).length; const c=el(id+'_c');
+  if(c) c.textContent = n===0 ? 'Nenhuma pessoa marcada' : (n===1 ? '1 pessoa marcada' : n+' pessoas marcadas');
 }
 function pickSelecionados(id){
   const box=el(id); if(!box) return [];
   return [...box.querySelectorAll('input:checked')].map(i=>i.value);
 }
+
+/* lista de seleção ÚNICA com busca (para escolher o responsável) */
+function pickOne(id, pessoas, selecionadoId){
+  pessoas = ordNome(pessoas);
+  if(!pessoas.length) return `<div class="pick-list"><div class="pick-empty page-sub">Nenhuma pessoa disponível.</div></div>`;
+  return `<input class="pick-search" id="${id}_q" placeholder="Buscar pelo nome…" autocomplete="off" oninput="pickFiltrar('${id}')"/>
+  <div class="pick-list" id="${id}">${pessoas.map(u=>`
+    <label class="pick-item" data-busca="${esc(semAcento(u.nome+' '+(u.login||'')))}">
+      <input type="radio" name="${id}_r" value="${u.id}" ${String(u.id)===String(selecionadoId||'')?'checked':''}/>
+      <span style="min-width:0"><b>${esc(u.nome)}</b>${u.login?`<br><span class="page-sub mono" style="font-size:.74rem">@${esc(u.login)}</span>`:''}</span>
+    </label>`).join('')}
+    <div class="pick-empty page-sub" id="${id}_none" style="display:none">Nenhuma pessoa encontrada com esse nome.</div>
+  </div>`;
+}
+function pickUm(id){
+  const box=el(id); if(!box) return '';
+  const m=box.querySelector('input:checked'); return m?m.value:'';
+}
 async function verArea(id){
   const areas=S.cache.areas||[]; const a=areas.find(x=>String(x.id)===String(id)); if(!a) return;
   const pai=a.paiId?areas.find(x=>String(x.id)===String(a.paiId)):null;
-  const filhos=areas.filter(x=>String(x.paiId)===String(a.id));
+  const filhos=ordNome(areas.filter(x=>String(x.paiId)===String(a.id)));
   const gerir=orgPodeGerir(a), transf=orgCanTransfer(a), addp=orgPodeAddPessoa(a);
   const aj=JSON.stringify(a).replace(/'/g,"&#39;");
   let r={membros:[],avaliadorNome:'',responsavelNome:a.responsavelNome};
@@ -1291,7 +1334,7 @@ async function modalNovaArea(paiId,paiNome){
     <div class="field"><label>${raiz?'Nome da empresa / área raiz':'Nome da área'}</label><input name="nome" required/></div>
     <div class="field"><label>Descrição (opcional)</label><input name="descricao"/></div>
     <div class="field"><label>Responsável (usuário já cadastrado)</label>
-      <select name="responsavelId" required>${candidatos.map(u=>`<option value="${u.id}">${esc(u.nome)} (@${esc(u.login)})</option>`).join('')}</select>
+      ${pickOne('naResp', candidatos)}
       <div class="hint">${raiz?'Será o topo do organograma.':'Passará a liderar esta área e responderá ao responsável de '+esc(paiNome)+'.'}</div>
     </div>
     ${raiz?'':`<div class="field"><label>Quem avalia as pessoas desta área?</label>
@@ -1302,9 +1345,11 @@ async function modalNovaArea(paiId,paiNome){
       <div class="hint">Define quem faz a avaliação de desempenho dos membros desta área.</div>
     </div>`}
   </form>`, footer:`<button class="btn btn-ghost" onclick="closeModal()">Cancelar</button><button class="btn btn-primary" id="bNA">Criar</button>`});
-  el('bNA').onclick=async()=>{ const f=el('fNA'); if(!f.reportValidity())return; const d=Object.fromEntries(new FormData(f)); const b=el('bNA');b.disabled=true;
-    try{ await api('criarArea',{nome:d.nome,descricao:d.descricao,paiId:paiId,responsavelId:d.responsavelId,avaliadoPor:d.avaliadoPor||'responsavel'}); toast('Área criada.','ok'); closeModal(); go('organograma'); }
-    catch(e){ toast(e.message,'err'); b.disabled=false; } };
+  el('bNA').onclick=async()=>{ const f=el('fNA'); if(!f.reportValidity())return; const d=Object.fromEntries(new FormData(f));
+    const resp=pickUm('naResp'); if(!resp){ toast('Escolha o responsável pela área.','err'); return; }
+    const b=el('bNA');b.disabled=true;b.textContent='Criando…';
+    try{ await api('criarArea',{nome:d.nome,descricao:d.descricao,paiId:paiId,responsavelId:resp,avaliadoPor:d.avaliadoPor||'responsavel'}); toast('Área criada.','ok'); closeModal(); go('organograma'); }
+    catch(e){ toast(e.message,'err'); b.disabled=false; b.textContent='Criar'; } };
 }
 async function modalEditarArea(a){
   // só admin ou um responsável acima desta área pode trocar quem responde por ela
@@ -1323,14 +1368,15 @@ async function modalEditarArea(a){
     <div class="field"><label>Nome</label><input name="nome" required value="${esc(a.nome)}"/></div>
     <div class="field"><label>Descrição</label><input name="descricao" value="${esc(a.descricao||'')}"/></div>
     ${podeTrocarResp?`<div class="field"><label>Responsável pela área</label>
-      <select name="responsavelId">${candidatos.map(u=>`<option value="${u.id}" ${String(u.id)===String(a.responsavelId)?'selected':''}>${esc(u.nome)}${u.login?' (@'+esc(u.login)+')':''}</option>`).join('')}</select>
+      ${pickOne('eaResp', candidatos, a.responsavelId)}
       <div class="hint">Ao trocar, a pessoa escolhida passa a liderar esta área e a responder ao responsável da área acima.</div></div>`
     :`<div class="hint">${ICON.info} Para trocar o responsável desta área, é preciso ser o administrador ou um responsável acima dela.</div>`}
   </form>`, footer:`<button class="btn btn-ghost" onclick="closeModal()">Cancelar</button><button class="btn btn-primary" id="bEA">Salvar</button>`});
   el('bEA').onclick=async()=>{ const d=Object.fromEntries(new FormData(el('fEA'))); const b=el('bEA');b.disabled=true;b.textContent='Salvando…';
     try{
       const req={id:a.id,nome:d.nome,descricao:d.descricao};
-      if(d.responsavelId && String(d.responsavelId)!==String(a.responsavelId)) req.responsavelId=d.responsavelId;
+      const novoResp=pickUm('eaResp');
+      if(novoResp && String(novoResp)!==String(a.responsavelId)) req.responsavelId=novoResp;
       await api('atualizarArea',req); toast('Área atualizada.','ok'); closeModal(); go('organograma');
     }catch(e){ toast(e.message,'err'); b.disabled=false; b.textContent='Salvar'; } };
 }
